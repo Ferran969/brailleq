@@ -13,7 +13,7 @@ ProvisionedText displayText;
 void initialize() {
   Bridge.begin();
   // Display text handler.
-  Bridge.provide("display_text", [](String text) {
+  Bridge.provide_safe("display_text", [](String text) {
     displayText.provide(text.c_str());
   });
 }

@@ -1,2 +1,4 @@
 # ignore app cache folder
 .cache/
+bricks/paddle_ocr/__pycache__/
+bricks/v4l2_capture/__pycache__/

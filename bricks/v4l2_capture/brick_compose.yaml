@@ -1,0 +1,6 @@
+services:
+  v4l2_capture:
+    build:
+      context: .
+    devices:
+      - "/dev/video2:/dev/video2"

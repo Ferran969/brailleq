@@ -17,6 +17,7 @@ void setup() {
   matrix.clear();
 
   Serial.begin(115200);
+  Monitor.begin(115200);
 
   Modulino.begin();
 
@@ -122,9 +123,25 @@ void loop() {
     false, false, false,
     false, false, false
   };
+  BrailleQ::BrailleCharacter all{
+    true, true, true,
+    true, true, true
+  };
   buttons.update();
 
+  // if (BrailleQ::bridge::displayText.update()) {
+  //   textIndex = 0;
+  // }
+
   if (BrailleQ::bridge::displayText.update()) {
+    Monitor.println("displayText update detected");
+  
+    Monitor.print("Text: ");
+    Monitor.print(
+      BrailleQ::bridge::displayText.text().c_str()
+    );
+    Monitor.println("");
+  
     textIndex = 0;
   }
 
@@ -146,8 +163,10 @@ void loop() {
   pressedB = buttons.isPressed('B');
   pressedC = buttons.isPressed('C');
 
-  if (text.empty() || text[textIndex] == ' ') display.draw(none); 
-  else display.draw(alphabet[text[textIndex] - 'a']);
+  if (text.empty() || text[textIndex] == ' ') display.draw(none);
+  else if (text[textIndex] >= 'a' && text[textIndex] <= 'z') display.draw(alphabet[text[textIndex] - 'a']);
+  else if (text[textIndex] >= 'A' && text[textIndex] <= 'Z') display.draw(alphabet[text[textIndex] - 'A']);
+  else display.draw(all);
   
   delay(20);
 }

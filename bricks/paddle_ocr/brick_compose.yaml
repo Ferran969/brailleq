@@ -1,0 +1,15 @@
+services:
+  paddle_ocr_service:
+    build:
+      context: .
+
+    environment:
+      PADDLE_PDX_CACHE_HOME: /models
+      PADDLE_PDX_MODEL_SOURCE: bos
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+
+    volumes:
+      - /home/arduino/paddle-cache:/models
+
+    ports:
+      - 5000
