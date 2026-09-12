@@ -66,4 +66,14 @@ def recognize(image: bytes) -> str:
             f"{response.text}"
         )
 
-    return response.json()["text"]
+    data = response.json()
+
+    for fragment in data.get("fragments", []):
+        text = fragment["text"]
+        confidence = fragment["confidence"]
+        print(
+            f'[OCR] {confidence:.1%} | "{text}"',
+            flush=True,
+        )
+
+    return data["text"]

@@ -113,18 +113,27 @@ def recognize():
     results = ocr.predict(image)
 
     lines = []
+    fragments = []
 
     for result in results:
         data = result.json
         data = data.get("res", data)
 
-        lines.extend(
-            data.get("rec_texts", [])
-        )
+        texts = data.get("rec_texts", [])
+        scores = data.get("rec_scores", [])
+
+        for text, score in zip(texts, scores):
+            confidence = float(score)
+            lines.append(text)
+            fragments.append({
+                "text": text,
+                "confidence": confidence,
+            })
 
     return jsonify({
         "text": "\n".join(lines),
         "lines": lines,
+        "fragments": fragments,
     })
 
 
