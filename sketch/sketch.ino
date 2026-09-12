@@ -133,15 +133,7 @@ void loop() {
   //   textIndex = 0;
   // }
 
-  if (BrailleQ::bridge::displayText.update()) {
-    Monitor.println("displayText update detected");
-  
-    Monitor.print("Text: ");
-    Monitor.print(
-      BrailleQ::bridge::displayText.text().c_str()
-    );
-    Monitor.println("");
-  
+  if (BrailleQ::bridge::displayText.takeUpdate()) {  
     textIndex = 0;
   }
 
