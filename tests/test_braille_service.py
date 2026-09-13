@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import subprocess
 import sys
 import threading
@@ -32,7 +34,30 @@ sys.modules[CLIENT_SPEC.name] = client_module
 CLIENT_SPEC.loader.exec_module(client_module)
 
 
+class ByteResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        self.close()
+
+
+class JsonResponse(ByteResponse):
+    def __init__(self, payload) -> None:
+        super().__init__(json.dumps(payload).encode("utf-8"))
+
+
 class BrailleServiceTests(unittest.TestCase):
+    @staticmethod
+    def translate_client_response(response: ByteResponse):
+        client = client_module.BrailleClient("http://braille.test")
+
+        with (
+            patch.object(client, "wait_until_ready"),
+            patch.object(client_module, "urlopen", return_value=response),
+        ):
+            return client.translate("Hi")
+
     def test_unicode_braille_to_cells(self) -> None:
         self.assertEqual(
             server.unicode_braille_to_cells("⠠⠓⠑⠇⠇⠕⠀⠼⠁⠃⠉"),
@@ -97,6 +122,130 @@ class BrailleServiceTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json(), {"error": "not found"})
+
+    def test_wrong_method_returns_json(self) -> None:
+        response = server.app.test_client().get("/translate")
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.content_type, "application/json")
+        self.assertEqual(response.get_json(), {"error": "method not allowed"})
+
+    def test_client_retries_until_service_is_ready(self) -> None:
+        client = client_module.BrailleClient(
+            "http://braille.test",
+            ready_timeout=1,
+        )
+
+        with (
+            patch.object(client_module.time, "sleep") as sleep_mock,
+            patch.object(
+                client_module,
+                "urlopen",
+                side_effect=[
+                    client_module.URLError("service is starting"),
+                    JsonResponse({"status": "ok"}),
+                ],
+            ) as urlopen_mock,
+        ):
+            client.wait_until_ready()
+
+        self.assertEqual(urlopen_mock.call_count, 2)
+        sleep_mock.assert_called_once()
+
+    def test_client_reports_readiness_timeout(self) -> None:
+        client = client_module.BrailleClient(
+            "http://braille.test",
+            ready_timeout=1,
+        )
+
+        with (
+            patch.object(
+                client_module.time,
+                "monotonic",
+                side_effect=[0.0, 0.0, 1.0, 1.0],
+            ),
+            patch.object(client_module.time, "sleep"),
+            patch.object(
+                client_module,
+                "urlopen",
+                side_effect=client_module.URLError("connection refused"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                client_module.BrailleClientError,
+                "did not become ready within 1s",
+            ):
+                client.wait_until_ready()
+
+    def test_client_rejects_malformed_response_json(self) -> None:
+        with self.assertRaisesRegex(
+            client_module.BrailleClientError,
+            "returned invalid JSON",
+        ):
+            self.translate_client_response(ByteResponse(b"{"))
+
+    def test_client_rejects_missing_response_field(self) -> None:
+        payload = {
+            "text": "Hi",
+            "cells": [32, 19, 10],
+            "dots": ["6", "125", "24"],
+            "count": 3,
+            "table": "en-ueb-g1.ctb",
+        }
+
+        with self.assertRaisesRegex(
+            client_module.BrailleClientError,
+            "missing 'braille' field",
+        ):
+            self.translate_client_response(JsonResponse(payload))
+
+    def test_client_rejects_boolean_cell(self) -> None:
+        payload = {
+            "text": "a",
+            "braille": "⠁",
+            "cells": [True],
+            "dots": ["1"],
+            "count": 1,
+            "table": "en-ueb-g1.ctb",
+        }
+
+        with self.assertRaisesRegex(
+            client_module.BrailleClientError,
+            "invalid or missing 'cells' field",
+        ):
+            self.translate_client_response(JsonResponse(payload))
+
+    def test_client_rejects_inconsistent_response(self) -> None:
+        payload = {
+            "text": "Hi",
+            "braille": "⠠⠓⠊",
+            "cells": [32, 19, 1],
+            "dots": ["6", "125", "1"],
+            "count": 3,
+            "table": "en-ueb-g1.ctb",
+        }
+
+        with self.assertRaisesRegex(
+            client_module.BrailleClientError,
+            "inconsistent 'braille' and 'cells' fields",
+        ):
+            self.translate_client_response(JsonResponse(payload))
+
+    def test_client_rejects_invalid_count(self) -> None:
+        payload = {
+            "text": "a",
+            "braille": "⠁",
+            "cells": [1],
+            "dots": ["1"],
+            "count": None,
+            "table": "en-ueb-g1.ctb",
+        }
+
+        with self.assertRaisesRegex(
+            client_module.BrailleClientError,
+            "invalid 'count' field",
+        ):
+            self.translate_client_response(JsonResponse(payload))
 
     def test_http_service_and_client(self) -> None:
         expected = {

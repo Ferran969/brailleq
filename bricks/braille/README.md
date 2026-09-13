@@ -22,6 +22,14 @@ print(result.cells)
 # [32, 19, 17, 7, 7, 21, 0, 60, 1, 3, 9]
 ```
 
+Before sending a translation, the client waits up to 30 seconds for the
+service health endpoint to become available. Use `ready_timeout` to change
+that startup limit:
+
+```python
+translator = BrailleClient(ready_timeout=60)
+```
+
 `result.cells` contains one integer for every six-dot Braille cell. Each
 integer is a bit mask with this layout:
 
@@ -112,4 +120,6 @@ python -m unittest discover -s tests -v
 ```
 
 The suite verifies the conversion helpers, whitespace normalization, service
-responses, error handling, and communication through `BrailleClient`.
+responses, error handling, and communication through `BrailleClient`. The
+client validates all required response fields and their internal consistency;
+malformed or incomplete responses raise `BrailleClientError`.

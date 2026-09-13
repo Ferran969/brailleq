@@ -176,6 +176,11 @@ def not_found(_error):
     return jsonify({"error": "not found"}), 404
 
 
+@app.errorhandler(405)
+def method_not_allowed(_error):
+    return jsonify({"error": "method not allowed"}), 405
+
+
 def main() -> None:
     probe = unicode_braille_to_cells(translate_to_unicode_braille("a"))
     if probe != [1]:
