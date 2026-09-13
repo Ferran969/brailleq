@@ -11,6 +11,9 @@ public:
   virtual void end() = 0;
   virtual void clear() = 0;
   virtual void draw(const BrailleCharacter&) = 0;
+  virtual void drawPhotoIndicator(bool) = 0;
+  virtual void drawLoading(int) = 0;
+  virtual void drawBlurryCross(bool) = 0;
 };
 
 } // namespace BrailleQ

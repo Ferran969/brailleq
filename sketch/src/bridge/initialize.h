@@ -9,7 +9,9 @@
 namespace BrailleQ::bridge {
 
 BrailleReceiver displayText;
-  
+
+bool blurryPicture = false;
+
 void initialize() {
   Bridge.begin();
   
@@ -32,6 +34,11 @@ void initialize() {
     [](uint32_t id) {
       return displayText.end(id);
     }
+  );
+
+  Bridge.provide_safe(
+    "blurry_picture",
+    []() { blurryPicture = true; }
   );
 }
 

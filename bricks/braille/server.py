@@ -87,11 +87,11 @@ def unicode_braille_to_cells(braille: str) -> list[int]:
 
     for character in braille:
         codepoint = ord(character)
-#        if not 0x2800 <= codepoint <= 0x283F:
-#            raise TranslationError(
-#                "Liblouis returned a non-six-dot-Braille character: "
-#                f"U+{codepoint:04X}"
-#            )
+        if not 0x2800 <= codepoint <= 0x283F:
+            raise TranslationError(
+                "Liblouis returned a non-six-dot-Braille character: "
+                f"U+{codepoint:04X}"
+            )
         cells.append(codepoint - 0x2800)
 
     return cells

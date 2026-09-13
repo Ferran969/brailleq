@@ -1,4 +1,6 @@
 import time
+from datetime import datetime
+from pathlib import Path
 
 from arduino.app_utils import App, Bridge
 
@@ -11,7 +13,29 @@ print("Hello world!")
 braille_translator = BrailleClient()
 
 picture_requested = False
-MIN_TEXT_SHARPNESS = 500.0
+MIN_TEXT_SHARPNESS = 100.0
+
+# TEMPORARY DEBUG CODE: remove this capture archive after camera diagnostics.
+DEBUG_CAPTURE_DIR = Path("debug_captures")
+
+
+def save_debug_capture(image: bytes) -> None:
+    try:
+        DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        capture_path = DEBUG_CAPTURE_DIR / f"capture_{timestamp}.jpg"
+        capture_path.write_bytes(image)
+        print(
+            f"[DEBUG CAPTURE] Fotografía guardada en {capture_path.resolve()}",
+            flush=True,
+        )
+    except OSError as error:
+        # Saving a debug copy must not prevent OCR from processing the image.
+        print(
+            f"[DEBUG CAPTURE] No se pudo guardar la fotografía: {error}",
+            flush=True,
+        )
+
 
 def loop():
     global picture_requested
@@ -20,6 +44,7 @@ def loop():
     if picture_requested:
         picture_requested = False
         image = capture_image(5)
+        save_debug_capture(image)
         text, text_sharpness = recognize(image)
 
         if (
@@ -38,6 +63,8 @@ def loop():
                 "Realice una nueva fotografía.",
                 flush=True,
             )
+
+            Bridge.notify("blurry_picture");
 
             # TODO(LED): sustituir el print por una notificación al sketch
             # para indicar mediante los LEDs que debe repetirse la fotografía.
@@ -58,7 +85,10 @@ def loop():
 
         print("Recognized text:")
         print(text)
-        translation = braille_translator.translate(text)
+        sanitized = sanitize_english_ocr(text)
+        print("Sanitized text:")
+        print(sanitized)
+        translation = braille_translator.translate(sanitized)
         braille_cells = bytes(translation.cells)
         
         display_braille(braille_cells)
@@ -72,6 +102,41 @@ def take_picture() -> None:
     global picture_requested
     print("Take picture")
     picture_requested = True
+
+
+import string
+import unicodedata
+
+
+ALLOWED_CHARS = set(
+    string.ascii_letters +
+    string.digits +
+    string.punctuation +
+    " \n\t"
+)
+
+
+def sanitize_english_ocr(text: str) -> str:
+    # Normalize things such as full-width ASCII characters.
+    text = unicodedata.normalize("NFKC", text)
+
+    cleaned = []
+
+    for char in text:
+        if char in ALLOWED_CHARS:
+            cleaned.append(char)
+        else:
+            # Don't accidentally join words together.
+            cleaned.append(" ")
+
+    # Clean up excessive spaces while preserving lines.
+    lines = [
+        " ".join(line.split())
+        for line in "".join(cleaned).splitlines()
+    ]
+
+    return "\n".join(line for line in lines if line)
+
 
 MAX_CHUNK_BYTES = 180
 

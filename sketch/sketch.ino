@@ -97,12 +97,20 @@ constexpr BrailleQ::BrailleCharacter alphabet[] = {
 
 int textIndex = 0;
 
+unsigned long countdownStart = 0;
+bool hasCountdownStarted = false;
+
+bool loading = false;
+unsigned long loadingStart = 0;
+int loadingPhase = -1;
+
 bool pressedA = false;
 bool pressedB = false;
 bool pressedC = false;
 
+BrailleQ::BrailleLedMatrixDisplay display{matrix};
+
 void loop() {
-  BrailleQ::BrailleLedMatrixDisplay display{matrix};
   // for (char c = 'a'; c <= 'z'; ++c) {
   //   display.draw(alphabet[c - 'a']);
   //   delay(1000);
@@ -135,6 +143,14 @@ void loop() {
 
   if (BrailleQ::bridge::displayText.takeUpdate()) {  
     textIndex = 0;
+  
+    hasCountdownStarted = false;
+  
+    loading = false;
+    loadingPhase = -1;
+  
+    display.drawPhotoIndicator(false);
+    display.drawLoading(0);
   }
 
   const auto& braille = BrailleQ::bridge::displayText.braille();
@@ -148,6 +164,21 @@ void loop() {
   }
   
   if (!pressedB && buttons.isPressed('B')) {
+    loading = false;
+    loadingPhase = -1;
+  
+    countdownStart = millis();
+    hasCountdownStarted = true;
+
+    BrailleQ::bridge::blurryPicture = false;
+    display.drawBlurryCross(false);
+  
+    // Keep the middle dot illuminated during the countdown.
+    display.drawPhotoIndicator(true);
+
+    // Delete the braille cell.
+    display.draw(none);
+
     BrailleQ::bridge::take_picture();
   }
 
@@ -155,24 +186,63 @@ void loop() {
   pressedB = buttons.isPressed('B');
   pressedC = buttons.isPressed('C');
 
-  if (braille.empty()) {
-    display.draw(none);
-  } else {
-    const auto encodedCell = braille[textIndex];
-    BrailleQ::BrailleCharacter cell{
-      static_cast<bool>((encodedCell >> 0) & 1),
-      static_cast<bool>((encodedCell >> 1) & 1),
-      static_cast<bool>((encodedCell >> 2) & 1),
-      static_cast<bool>((encodedCell >> 3) & 1),
-      static_cast<bool>((encodedCell >> 4) & 1),
-      static_cast<bool>((encodedCell >> 5) & 1)
-    };
-    display.draw(cell);
+  if (!hasCountdownStarted && !loading && !BrailleQ::bridge::blurryPicture) {
+    if (braille.empty()) {
+      display.draw(none);
+    } else {
+      const auto encodedCell = braille[textIndex];
+  
+      BrailleQ::BrailleCharacter cell{
+        static_cast<bool>((encodedCell >> 0) & 1),
+        static_cast<bool>((encodedCell >> 1) & 1),
+        static_cast<bool>((encodedCell >> 2) & 1),
+        static_cast<bool>((encodedCell >> 3) & 1),
+        static_cast<bool>((encodedCell >> 4) & 1),
+        static_cast<bool>((encodedCell >> 5) & 1)
+      };
+  
+      display.draw(cell);
+    }
   }
-  //if (text.empty() || text[textIndex] == ' ') display.draw(none);
-  //else if (text[textIndex] >= 'a' && text[textIndex] <= 'z') display.draw(alphabet[text[textIndex] - 'a']);
-  //else if (text[textIndex] >= 'A' && text[textIndex] <= 'Z') display.draw(alphabet[text[textIndex] - 'A']);
-  //else display.draw(all);
+
+  if (hasCountdownStarted) {
+    const unsigned long elapsed = millis() - countdownStart;
+  
+    if (elapsed >= 5000) {
+      hasCountdownStarted = false;
+  
+      // Turn off the static middle dot.
+      display.drawPhotoIndicator(false);
+  
+      // Now start the loading animation.
+      loading = true;
+      loadingStart = millis();
+      loadingPhase = -1;
+    }
+  }
+
+  if (loading) {
+    const unsigned long elapsed = millis() - loadingStart;
+  
+    // Change every 1000 ms.
+    const int phase = (elapsed / 1000) % 4;
+  
+    if (phase != loadingPhase) {
+      loadingPhase = phase;
+      display.drawLoading(phase);
+    }
+  } 
+
+  if (BrailleQ::bridge::blurryPicture) {
+    hasCountdownStarted = false;
+  
+    loading = false;
+    loadingPhase = -1;
+  
+    display.drawPhotoIndicator(false);
+    display.drawLoading(0);
+    display.drawBlurryCross(true);
+  }
   
   delay(20);
 }

@@ -15,6 +15,9 @@ public:
   void end() override;
   void clear() override;
   void draw(const BrailleCharacter&) override;
+  void drawPhotoIndicator(bool) override;
+  void drawLoading(int) override;
+  void drawBlurryCross(bool) override;
   static constexpr std::size_t rows = 8;
   static constexpr std::size_t columns = 13;
 private:
