@@ -2,18 +2,82 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import threading
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 
 HOST = "0.0.0.0"
 PORT = 8000
-DEVICE = "/dev/video2"
+DEVICE = os.getenv("CAMERA_DEVICE", "/dev/brailleq-camera")
+DEBUG_CAPTURE_DIR = Path(os.getenv("DEBUG_CAPTURE_DIR", "/captures"))
 
 # One process should own/configure the camera at a time.
 _camera_lock = threading.Lock()
+
+
+def _validate_camera_device() -> None:
+    """Fail early unless the mapped device is a capture node with MJPEG."""
+    try:
+        device_stat = os.stat(DEVICE)
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            f"Camera device {DEVICE} does not exist inside the container"
+        ) from error
+    except OSError as error:
+        raise RuntimeError(
+            f"Could not inspect camera device {DEVICE}: {error}"
+        ) from error
+
+    if not stat.S_ISCHR(device_stat.st_mode):
+        raise RuntimeError(f"Camera device {DEVICE} is not a character device")
+
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "-d", DEVICE, "--list-formats-ext"],
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"Timed out while checking camera device {DEVICE}"
+        ) from error
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(
+            f"Camera device {DEVICE} is not a usable video capture node: "
+            f"{detail or 'v4l2-ctl failed'}"
+        )
+
+    if "MJPG" not in result.stdout:
+        raise RuntimeError(
+            f"Camera device {DEVICE} does not advertise the required MJPEG format"
+        )
+
+
+def _save_debug_capture(image: bytes) -> None:
+    """Temporarily archive every successful capture in the shared volume."""
+    try:
+        DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        capture_path = DEBUG_CAPTURE_DIR / f"capture_{timestamp}.jpg"
+        capture_path.write_bytes(image)
+        print(
+            f"[v4l2_capture] debug image saved to {capture_path}",
+            flush=True,
+        )
+    except OSError as error:
+        # A debug-copy failure must not prevent OCR from receiving the image.
+        print(
+            f"[v4l2_capture] could not save debug image: {error}",
+            flush=True,
+        )
 
 
 def _capture(payload: dict) -> bytes:
@@ -84,6 +148,8 @@ def _capture(payload: dict) -> bytes:
                 "(missing JPEG SOI marker)"
             )
 
+        # TEMPORARY DEBUG CODE: remove after camera diagnostics are complete.
+        _save_debug_capture(image)
         return image
     finally:
         try:
@@ -148,6 +214,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _validate_camera_device()
     print(
         f"[v4l2_capture] serving on {HOST}:{PORT}, camera={DEVICE}",
         flush=True,

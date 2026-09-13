@@ -3,4 +3,9 @@ services:
     build:
       context: .
     devices:
-      - "/dev/video2:/dev/video2"
+      - "${CAMERA_HOST_DEVICE:-/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_E24E2F9F-video-index0}:/dev/brailleq-camera"
+    environment:
+      CAMERA_DEVICE: /dev/brailleq-camera
+      DEBUG_CAPTURE_DIR: /captures
+    volumes:
+      - "/home/arduino/brailleq-captures:/captures"

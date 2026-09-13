@@ -2,3 +2,7 @@ id: v4l2_capture
 name: V4L2 Capture
 description: "Capture an MJPEG frame from a V4L2 camera after allowing continuous autofocus to settle."
 category: miscellaneous
+variables:
+  - name: CAMERA_HOST_DEVICE
+    description: "Stable /dev/v4l/by-id path of the host camera capture node"
+    default_value: /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_E24E2F9F-video-index0
