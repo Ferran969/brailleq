@@ -2,4 +2,6 @@
 .cache/
 bricks/paddle_ocr/__pycache__/
 bricks/v4l2_capture/__pycache__/
+python/__pycache__/
 debug_output/
+debug_captures/

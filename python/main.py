@@ -1,4 +1,6 @@
 import time
+from datetime import datetime
+from pathlib import Path
 
 from arduino.app_utils import App, Bridge
 
@@ -10,6 +12,27 @@ print("Hello world!")
 picture_requested = False
 MIN_TEXT_SHARPNESS = 500.0
 
+# TEMPORARY DEBUG CODE: remove this capture archive after camera diagnostics.
+DEBUG_CAPTURE_DIR = Path("debug_captures")
+
+
+def save_debug_capture(image: bytes) -> None:
+    try:
+        DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        capture_path = DEBUG_CAPTURE_DIR / f"capture_{timestamp}.jpg"
+        capture_path.write_bytes(image)
+        print(
+            f"[DEBUG CAPTURE] Fotografía guardada en {capture_path.resolve()}",
+            flush=True,
+        )
+    except OSError as error:
+        # Saving a debug copy must not prevent OCR from processing the image.
+        print(
+            f"[DEBUG CAPTURE] No se pudo guardar la fotografía: {error}",
+            flush=True,
+        )
+
 def loop():
     global picture_requested
     """This function is called repeatedly by the App framework."""
@@ -17,6 +40,7 @@ def loop():
     if picture_requested:
         picture_requested = False
         image = capture_image(5)
+        save_debug_capture(image)
         text, text_sharpness = recognize(image)
 
         if (
