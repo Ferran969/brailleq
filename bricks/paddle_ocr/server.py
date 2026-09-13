@@ -13,11 +13,25 @@ ocr_error = None
 ocr_ready = threading.Event()
 
 
+MIN_REGION_AREA_RATIO = 0.02
+
+
+def _weighted_median(values, weights):
+    """Return the median of values, using the corresponding areas as weights."""
+    order = np.argsort(values)
+    sorted_values = np.asarray(values, dtype=np.float64)[order]
+    sorted_weights = np.asarray(weights, dtype=np.float64)[order]
+    midpoint = sorted_weights.sum() / 2.0
+    index = np.searchsorted(np.cumsum(sorted_weights), midpoint, side="left")
+    return float(sorted_values[min(index, len(sorted_values) - 1)])
+
+
 def _text_region_sharpness(image, polygons):
-    """Return the variance of the Laplacian inside detected text polygons."""
+    """Return an area-weighted median of significant text-region sharpness."""
     grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    text_mask = np.zeros(grayscale.shape, dtype=np.uint8)
     height, width = grayscale.shape
+    laplacian = cv2.Laplacian(grayscale, cv2.CV_64F)
+    regions = []
 
     for polygon in polygons:
         points = np.asarray(polygon, dtype=np.int32).reshape(-1, 2)
@@ -26,14 +40,40 @@ def _text_region_sharpness(image, polygons):
 
         points[:, 0] = np.clip(points[:, 0], 0, width - 1)
         points[:, 1] = np.clip(points[:, 1], 0, height - 1)
-        cv2.fillPoly(text_mask, [points], 255)
+        region_mask = np.zeros(grayscale.shape, dtype=np.uint8)
+        cv2.fillPoly(region_mask, [points], 255)
 
-    selected_pixels = text_mask > 0
-    if not np.any(selected_pixels):
+        selected_pixels = region_mask > 0
+        area = int(np.count_nonzero(selected_pixels))
+        if area == 0:
+            continue
+
+        regions.append({
+            "area": area,
+            "sharpness": float(laplacian[selected_pixels].var()),
+        })
+
+    if not regions:
         return None
 
-    laplacian = cv2.Laplacian(grayscale, cv2.CV_64F)
-    return float(laplacian[selected_pixels].var())
+    total_text_area = sum(region["area"] for region in regions)
+    minimum_area = total_text_area * MIN_REGION_AREA_RATIO
+    significant_regions = [
+        region
+        for region in regions
+        if region["area"] >= minimum_area
+    ]
+
+    # More than 50 similarly-sized regions could all fall below 2% of the
+    # total. In that unusual case, keep every region instead of returning no
+    # sharpness measurement.
+    if not significant_regions:
+        significant_regions = regions
+
+    return _weighted_median(
+        [region["sharpness"] for region in significant_regions],
+        [region["area"] for region in significant_regions],
+    )
 
 
 def initialize_ocr():
