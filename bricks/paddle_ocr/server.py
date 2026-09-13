@@ -13,6 +13,29 @@ ocr_error = None
 ocr_ready = threading.Event()
 
 
+def _text_region_sharpness(image, polygons):
+    """Return the variance of the Laplacian inside detected text polygons."""
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    text_mask = np.zeros(grayscale.shape, dtype=np.uint8)
+    height, width = grayscale.shape
+
+    for polygon in polygons:
+        points = np.asarray(polygon, dtype=np.int32).reshape(-1, 2)
+        if len(points) < 3:
+            continue
+
+        points[:, 0] = np.clip(points[:, 0], 0, width - 1)
+        points[:, 1] = np.clip(points[:, 1], 0, height - 1)
+        cv2.fillPoly(text_mask, [points], 255)
+
+    selected_pixels = text_mask > 0
+    if not np.any(selected_pixels):
+        return None
+
+    laplacian = cv2.Laplacian(grayscale, cv2.CV_64F)
+    return float(laplacian[selected_pixels].var())
+
+
 def initialize_ocr():
     global ocr, ocr_error
 
@@ -114,6 +137,7 @@ def recognize():
 
     lines = []
     fragments = []
+    text_polygons = []
 
     for result in results:
         data = result.json
@@ -130,10 +154,18 @@ def recognize():
                 "confidence": confidence,
             })
 
+        polygons = data.get("rec_polys")
+        if polygons is None:
+            polygons = data.get("dt_polys", [])
+        text_polygons.extend(polygons)
+
+    text_sharpness = _text_region_sharpness(image, text_polygons)
+
     return jsonify({
         "text": "\n".join(lines),
         "lines": lines,
         "fragments": fragments,
+        "text_sharpness": text_sharpness,
     })
 
 

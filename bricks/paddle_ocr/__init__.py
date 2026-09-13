@@ -45,7 +45,7 @@ def wait_until_ready(timeout: float = 600) -> None:
     )
 
 
-def recognize(image: bytes) -> str:
+def recognize(image: bytes) -> tuple[str, float | None]:
     wait_until_ready()
 
     response = requests.post(
@@ -76,4 +76,8 @@ def recognize(image: bytes) -> str:
             flush=True,
         )
 
-    return data["text"]
+    text_sharpness = data.get("text_sharpness")
+    if text_sharpness is not None:
+        text_sharpness = float(text_sharpness)
+
+    return data["text"], text_sharpness

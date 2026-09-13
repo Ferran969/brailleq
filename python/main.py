@@ -8,6 +8,7 @@ from v4l2_capture import capture_image
 print("Hello world!")
 
 picture_requested = False
+MIN_TEXT_SHARPNESS = 500.0
 
 def loop():
     global picture_requested
@@ -16,7 +17,42 @@ def loop():
     if picture_requested:
         picture_requested = False
         image = capture_image(5)
-        text = recognize(image)
+        text, text_sharpness = recognize(image)
+
+        if (
+            text_sharpness is None
+            or text_sharpness < MIN_TEXT_SHARPNESS
+        ):
+            measured_value = (
+                "no disponible"
+                if text_sharpness is None
+                else f"{text_sharpness:.3f}"
+            )
+            print(
+                "[PHOTO QUALITY] La fotografía ha salido mal "
+                f"(nitidez del texto: {measured_value}; "
+                f"mínimo: {MIN_TEXT_SHARPNESS:.0f}). "
+                "Realice una nueva fotografía.",
+                flush=True,
+            )
+
+            # TODO(LED): sustituir el print por una notificación al sketch
+            # para indicar mediante los LEDs que debe repetirse la fotografía.
+            # Bridge.call("photo_quality", False)
+            return
+
+        print(
+            "[PHOTO QUALITY] La fotografía ha salido bien "
+            f"(nitidez del texto: {text_sharpness:.3f}; "
+            f"mínimo: {MIN_TEXT_SHARPNESS:.0f}). "
+            "No es necesario repetirla.",
+            flush=True,
+        )
+
+        # TODO(LED): sustituir el print por una notificación al sketch para
+        # indicar mediante los LEDs que la fotografía ha sido aceptada.
+        # Bridge.call("photo_quality", True)
+
         print("Recognized text:")
         print(text)
         display_text(text)
