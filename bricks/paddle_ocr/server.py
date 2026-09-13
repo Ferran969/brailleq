@@ -1,9 +1,12 @@
-from flask import Flask, request, jsonify
+import os
+import threading
+import traceback
+from datetime import datetime
+from pathlib import Path
 
 import cv2
 import numpy as np
-import threading
-import traceback
+from flask import Flask, jsonify, request
 
 
 app = Flask(__name__)
@@ -14,6 +17,7 @@ ocr_ready = threading.Event()
 
 
 MIN_REGION_AREA_RATIO = 0.02
+DEBUG_OVERLAY_DIR = Path(os.getenv("DEBUG_OVERLAY_DIR", "/captures"))
 
 
 def _weighted_median(values, weights):
@@ -24,6 +28,52 @@ def _weighted_median(values, weights):
     midpoint = sorted_weights.sum() / 2.0
     index = np.searchsorted(np.cumsum(sorted_weights), midpoint, side="left")
     return float(sorted_values[min(index, len(sorted_values) - 1)])
+
+
+def _save_detection_overlay(image, polygons):
+    """Temporarily save an image highlighting every detected text region."""
+    try:
+        height, width = image.shape[:2]
+        highlighted = image.copy()
+        overlay = image.copy()
+        clipped_polygons = []
+
+        for polygon in polygons:
+            points = np.asarray(polygon, dtype=np.int32).reshape(-1, 2)
+            if len(points) < 3:
+                continue
+
+            points[:, 0] = np.clip(points[:, 0], 0, width - 1)
+            points[:, 1] = np.clip(points[:, 1], 0, height - 1)
+            clipped_polygons.append(points)
+            cv2.fillPoly(overlay, [points], (0, 255, 0))
+
+        highlighted = cv2.addWeighted(
+            highlighted,
+            0.70,
+            overlay,
+            0.30,
+            0.0,
+        )
+
+        for points in clipped_polygons:
+            cv2.polylines(highlighted, [points], True, (0, 255, 0), 3)
+
+        DEBUG_OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = DEBUG_OVERLAY_DIR / f"ocr_overlay_{timestamp}.jpg"
+        if not cv2.imwrite(str(output_path), highlighted):
+            raise OSError("cv2.imwrite returned false")
+        print(
+            f"[paddle_ocr] detection overlay saved to {output_path}",
+            flush=True,
+        )
+    except Exception as error:
+        # TEMPORARY DEBUG CODE: saving an overlay must not break OCR.
+        print(
+            f"[paddle_ocr] could not save detection overlay: {error}",
+            flush=True,
+        )
 
 
 def _text_region_sharpness(image, polygons):
@@ -199,6 +249,8 @@ def recognize():
             polygons = data.get("dt_polys", [])
         text_polygons.extend(polygons)
 
+    # TEMPORARY DEBUG CODE: remove after OCR-region diagnostics are complete.
+    _save_detection_overlay(image, text_polygons)
     text_sharpness = _text_region_sharpness(image, text_polygons)
 
     return jsonify({
