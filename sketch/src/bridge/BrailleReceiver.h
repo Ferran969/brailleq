@@ -1,12 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
+#include <vector>
 #include <utility>
 
 namespace BrailleQ::bridge {
 
-class TextReceiver {
+class BrailleReceiver {
 public:
   bool begin(uint32_t id, size_t size) {
     m_id = id;
@@ -19,7 +19,7 @@ public:
     return true;
   }
 
-  bool chunk(uint32_t id, size_t offset, const String& chunk) {
+  bool chunk(uint32_t id, size_t offset, const MsgPack::bin_t<uint8_t>& chunk) {
     if (!m_receiving)
       return false;
 
@@ -29,9 +29,12 @@ public:
     if (offset != m_buffer.size())
       return false;
 
-    m_buffer.append(
-      chunk.c_str(),
-      chunk.length()
+    const auto bufferOffset = m_buffer.size();
+    m_buffer.resize(bufferOffset + chunk.size());
+    std::copy(
+      chunk.begin(),
+      chunk.end(),
+      m_buffer.begin() + bufferOffset
     );
 
     return true;
@@ -61,7 +64,7 @@ public:
     return updated;
   }
 
-  const std::string& text() const & {
+  const std::vector<uint8_t>& braille() const & {
     return m_completedText;
   }
 
@@ -72,8 +75,8 @@ private:
   bool m_receiving{false};
   bool m_updated{false};
 
-  std::string m_buffer;
-  std::string m_completedText;
+  std::vector<uint8_t> m_buffer;
+  std::vector<uint8_t> m_completedText;
 };
 
 } // namespace BrailleQ::bridge

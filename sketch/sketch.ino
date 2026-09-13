@@ -137,14 +137,14 @@ void loop() {
     textIndex = 0;
   }
 
-  const auto& text = BrailleQ::bridge::displayText.text();
+  const auto& braille = BrailleQ::bridge::displayText.braille();
   
   if (!pressedA && buttons.isPressed('A')) {
     if (textIndex > 0) --textIndex;
   }
 
   if (!pressedC && buttons.isPressed('C')) {
-    if (textIndex + 1 < text.size()) ++textIndex;
+    if (textIndex + 1 < braille.size()) ++textIndex;
   }
   
   if (!pressedB && buttons.isPressed('B')) {
@@ -155,10 +155,24 @@ void loop() {
   pressedB = buttons.isPressed('B');
   pressedC = buttons.isPressed('C');
 
-  if (text.empty() || text[textIndex] == ' ') display.draw(none);
-  else if (text[textIndex] >= 'a' && text[textIndex] <= 'z') display.draw(alphabet[text[textIndex] - 'a']);
-  else if (text[textIndex] >= 'A' && text[textIndex] <= 'Z') display.draw(alphabet[text[textIndex] - 'A']);
-  else display.draw(all);
+  if (braille.empty()) {
+    display.draw(none);
+  } else {
+    const auto encodedCell = braille[textIndex];
+    BrailleQ::BrailleCharacter cell{
+      static_cast<bool>((encodedCell >> 0) & 1),
+      static_cast<bool>((encodedCell >> 1) & 1),
+      static_cast<bool>((encodedCell >> 2) & 1),
+      static_cast<bool>((encodedCell >> 3) & 1),
+      static_cast<bool>((encodedCell >> 4) & 1),
+      static_cast<bool>((encodedCell >> 5) & 1)
+    };
+    display.draw(cell);
+  }
+  //if (text.empty() || text[textIndex] == ' ') display.draw(none);
+  //else if (text[textIndex] >= 'a' && text[textIndex] <= 'z') display.draw(alphabet[text[textIndex] - 'a']);
+  //else if (text[textIndex] >= 'A' && text[textIndex] <= 'Z') display.draw(alphabet[text[textIndex] - 'A']);
+  //else display.draw(all);
   
   delay(20);
 }

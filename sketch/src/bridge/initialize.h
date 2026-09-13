@@ -2,33 +2,33 @@
 
 #include <Arduino_RouterBridge.h>
 
-#include "TextReceiver.h"
+#include "BrailleReceiver.h"
 
 #include <utility>
 
 namespace BrailleQ::bridge {
 
-TextReceiver displayText;
+BrailleReceiver displayText;
   
 void initialize() {
   Bridge.begin();
   
   Bridge.provide_safe(
-    "text_begin",
+    "braille_begin",
     [](uint32_t id, uint32_t size) {
       return displayText.begin(id, size);
     }
   );
 
   Bridge.provide_safe(
-    "text_chunk",
-    [](uint32_t id, uint32_t offset, String chunk) {
+    "braille_chunk",
+    [](uint32_t id, uint32_t offset, MsgPack::bin_t<uint8_t> chunk) {
       return displayText.chunk(id, offset, chunk);
     }
   );
 
   Bridge.provide_safe(
-    "text_end",
+    "braille_end",
     [](uint32_t id) {
       return displayText.end(id);
     }
