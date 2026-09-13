@@ -1,0 +1,7 @@
+id: braille
+name: Braille Translator
+description: Translate English text to six-dot Unified English Braille cells with Liblouis
+variables:
+  - name: BRAILLE_TABLE
+    description: Liblouis translation table (Grade 1 is uncontracted; Grade 2 is contracted)
+    default_value: en-ueb-g1.ctb

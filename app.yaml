@@ -4,4 +4,5 @@ ports: []
 bricks:
 - paddle_ocr: {}
 - v4l2_capture: {}
+- braille: {}
 icon: 😀

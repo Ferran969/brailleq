@@ -1,0 +1,14 @@
+services:
+  braille:
+    build: .
+    environment:
+      BRAILLE_TABLE: "${BRAILLE_TABLE:-en-ueb-g1.ctb}"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"
+      interval: 2s
+      timeout: 3s
+      retries: 15
