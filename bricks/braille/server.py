@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 import subprocess
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+
+from flask import Flask, jsonify, request
+from werkzeug.exceptions import (
+    BadRequest,
+    RequestEntityTooLarge,
+    UnsupportedMediaType,
+)
 
 
 HOST = "0.0.0.0"
@@ -24,6 +28,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger("braille")
+
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
 
 
 class TranslationError(RuntimeError):
@@ -119,70 +126,54 @@ def translate(text: str, *, normalize_whitespace: bool = True) -> dict[str, Any]
     }
 
 
-class BrailleRequestHandler(BaseHTTPRequestHandler):
-    server_version = "BrailleBrick/1.0"
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "table": TABLE,
+        "display_table": DISPLAY_TABLE,
+    }
 
-    def _write_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status.value)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
 
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path != "/health":
-            self._write_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
-            return
+@app.post("/translate")
+def translate_text():
+    try:
+        content_length = request.content_length or 0
+        if content_length <= 0:
+            raise ValueError("request body is empty")
+        if content_length > MAX_REQUEST_BYTES:
+            raise RequestEntityTooLarge()
 
-        self._write_json(
-            HTTPStatus.OK,
-            {"status": "ok", "table": TABLE, "display_table": DISPLAY_TABLE},
+        payload = request.get_json()
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object")
+
+        text = payload.get("text")
+        if not isinstance(text, str):
+            raise ValueError("'text' must be a string")
+
+        normalize_whitespace = payload.get("normalize_whitespace", True)
+        if not isinstance(normalize_whitespace, bool):
+            raise ValueError("'normalize_whitespace' must be a boolean")
+
+        return jsonify(
+            translate(text, normalize_whitespace=normalize_whitespace)
         )
+    except (BadRequest, UnsupportedMediaType, ValueError) as error:
+        return jsonify({"error": str(error)}), 400
+    except TranslationError as error:
+        logger.exception("Translation failed")
+        return jsonify({"error": str(error)}), 500
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path != "/translate":
-            self._write_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
-            return
 
-        try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0:
-                raise ValueError("request body is empty")
-            if content_length > MAX_REQUEST_BYTES:
-                self._write_json(
-                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
-                    {"error": f"request exceeds {MAX_REQUEST_BYTES} bytes"},
-                )
-                return
+@app.errorhandler(RequestEntityTooLarge)
+def request_too_large(_error):
+    return jsonify({"error": f"request exceeds {MAX_REQUEST_BYTES} bytes"}), 413
 
-            payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-            if not isinstance(payload, dict):
-                raise ValueError("JSON body must be an object")
 
-            text = payload.get("text")
-            if not isinstance(text, str):
-                raise ValueError("'text' must be a string")
-
-            normalize_whitespace = payload.get("normalize_whitespace", True)
-            if not isinstance(normalize_whitespace, bool):
-                raise ValueError("'normalize_whitespace' must be a boolean")
-
-            self._write_json(
-                HTTPStatus.OK,
-                translate(text, normalize_whitespace=normalize_whitespace),
-            )
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-            self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
-        except TranslationError as error:
-            logger.exception("Translation failed")
-            self._write_json(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"error": str(error)},
-            )
-
-    def log_message(self, message_format: str, *args: Any) -> None:
-        logger.info("%s - %s", self.address_string(), message_format % args)
+@app.errorhandler(404)
+def not_found(_error):
+    return jsonify({"error": "not found"}), 404
 
 
 def main() -> None:
@@ -192,14 +183,13 @@ def main() -> None:
             f"unexpected startup probe result for {TABLE}: {probe!r}"
         )
 
-    server = ThreadingHTTPServer((HOST, PORT), BrailleRequestHandler)
     logger.info("Braille Brick listening on %s:%d using %s", HOST, PORT, TABLE)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+    app.run(
+        host=HOST,
+        port=PORT,
+        threaded=True,
+        use_reloader=False,
+    )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 FROM python:3.13-slim-trixie
 
+RUN python -m pip install --no-cache-dir flask
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         liblouis-bin \
