@@ -138,11 +138,6 @@ def recognize():
 
 
 if __name__ == "__main__":
-    print(
-        "Starting OCR service: single-thread diagnostic",
-        flush=True,
-    )
-
     # Create the OCR instance on the main thread.
     initialize_ocr()
 
