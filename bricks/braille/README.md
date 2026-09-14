@@ -1,13 +1,21 @@
 # Braille Translator Brick
 
-This Arduino App Lab Brick translates complete English strings with Liblouis
-and returns six-dot Unified English Braille (UEB) cells. The default table is
-`en-ueb-g1.ctb`, which produces uncontracted Grade 1 Braille.
+The Braille Translator Brick converts complete English strings into six-dot
+Unified English Braille (UEB) using Liblouis. It returns Unicode Braille,
+MCU-friendly cell values, and human-readable dot notation.
 
-## Client API
+The default table is `en-ueb-g1.ctb`, which produces uncontracted Grade 1 UEB.
 
-Like the other BrailleQ Bricks, the Python client is exposed by the Brick
-package itself:
+## Requirements
+
+The service runs in its own container. Its image installs Flask,
+`liblouis-bin`, and `liblouis-data`, so Liblouis is not required in the main
+application container.
+
+Any table selected through `BRAILLE_TABLE` must be installed in the service
+image and must produce six-dot Unicode Braille characters.
+
+## Quick start
 
 ```python
 from braille import BrailleClient
@@ -22,16 +30,49 @@ print(result.cells)
 # [32, 19, 17, 7, 7, 21, 0, 60, 1, 3, 9]
 ```
 
-Before sending a translation, the client waits up to 30 seconds for the
-service health endpoint to become available. Use `ready_timeout` to change
-that startup limit:
+## Python API
+
+### `BrailleClient`
 
 ```python
-translator = BrailleClient(ready_timeout=60)
+BrailleClient(
+    base_url="http://braille:8080",
+    timeout=20.0,
+    ready_timeout=30.0,
+)
 ```
 
-`result.cells` contains one integer for every six-dot Braille cell. Each
-integer is a bit mask with this layout:
+- `base_url` is the internal address of the translation service.
+- `timeout` is the maximum duration of one translation request.
+- `ready_timeout` is the maximum time spent waiting for the service health
+  endpoint before a translation.
+
+Both timeout values must be greater than zero.
+
+### `translate`
+
+```python
+result = translator.translate(
+    "Hello world",
+    normalize_whitespace=True,
+)
+```
+
+With `normalize_whitespace=True`, line breaks, tabs, and repeated spaces are
+converted into one Braille blank. If normalization is disabled, input line
+breaks are rejected because they cannot be represented by one six-bit cell.
+
+The returned `BrailleTranslation` contains:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `text` | `str` | Text actually passed to Liblouis after normalization. |
+| `braille` | `str` | Unicode six-dot Braille string. |
+| `cells` | `list[int]` | Cell bit masks in the range `0..63`. |
+| `dots` | `list[str]` | Dot notation such as `125` or `0`. |
+| `table` | `str` | Liblouis table used for translation. |
+
+Cell integers use the following bit layout:
 
 ```text
 bit 0 = dot 1
@@ -42,10 +83,8 @@ bit 4 = dot 5
 bit 5 = dot 6
 ```
 
-OCR whitespace is normalized by default: line breaks, tabs, and repeated
-spaces become one Braille blank. Pass `normalize_whitespace=False` to preserve
-whitespace; line breaks are rejected because they cannot be represented by a
-six-bit Braille cell.
+Connection failures, service errors, timeouts, malformed responses, and
+non-six-dot output raise `BrailleClientError`.
 
 ## Service API
 
@@ -76,9 +115,7 @@ Content-Type: application/json
 {"text":"Hello 123","normalize_whitespace":true}
 ```
 
-The response includes the normalized text, Unicode Braille, six-bit integer
-cells, human-readable dot notation, the number of cells, and the Liblouis
-table used for translation.
+Example response:
 
 ```json
 {
@@ -91,35 +128,49 @@ table used for translation.
 }
 ```
 
-Invalid requests return JSON with an `error` field and an appropriate HTTP
-status. Request bodies are limited to 64 KiB and input text to 16,000
-characters.
+Invalid requests return a JSON object with an `error` field. Request bodies
+are limited to 64 KiB and input text is limited to 16,000 characters.
 
 ## Configuration
 
-Set `BRAILLE_TABLE` in the Brick configuration to select another installed
-Liblouis table. For example, use `en-ueb-g2.ctb` for contracted Grade 2 UEB.
-The default is `en-ueb-g1.ctb`.
+| Variable | Default | Description |
+| --- | --- | --- |
+| `BRAILLE_TABLE` | `en-ueb-g1.ctb` | Liblouis translation table. For example, `en-ueb-g2.ctb` selects contracted Grade 2 UEB. |
 
-## Container
+## Limitations
 
-The image installs Flask, `liblouis-bin`, and `liblouis-data`. App Lab builds
-and starts the service declared in `brick_compose.yaml`; its health check waits
-for `GET /health` to respond successfully.
+- The complete data path is six-dot only; every cell must be between `0` and
+  `63`.
+- The default table is for English UEB. Selecting an eight-dot table does not
+  add support for another language.
+- Unsupported characters can make Liblouis emit technical fallback patterns.
+  Output containing dots 7 or 8 is rejected instead of being sent to the
+  display as valid six-dot Braille.
+- Text from OCR should be sanitized for the expected language before calling
+  this Brick.
 
-After changing the service or its dependencies, rebuild the Brick container so
-the new code is copied into the image.
+## Rebuilding
+
+After modifying the client, service, Dockerfile, or Compose configuration,
+rebuild the App cache on the Arduino host:
+
+```bash
+arduino-app-cli app stop user:brailleq
+arduino-app-cli app clean-cache user:brailleq
+arduino-app-cli app start user:brailleq --verbose
+```
+
+Replace `user:brailleq` if the App has a different identifier.
 
 ## Tests
 
-The unit tests mock Liblouis, so they do not require `lou_translate` to be
-installed on the development machine. They do require Flask:
+The unit tests mock the Liblouis process and therefore do not require
+`lou_translate` on the development host. Flask is required.
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest tests.test_braille_service -v
 ```
 
-The suite verifies the conversion helpers, whitespace normalization, service
-responses, error handling, and communication through `BrailleClient`. The
-client validates all required response fields and their internal consistency;
-malformed or incomplete responses raise `BrailleClientError`.
+The suite covers conversion helpers, whitespace normalization, HTTP error
+responses, readiness retries, client validation, and an end-to-end local HTTP
+request.
