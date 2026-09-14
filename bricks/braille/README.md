@@ -6,6 +6,10 @@ MCU-friendly cell values, and human-readable dot notation.
 
 The default table is `en-ueb-g1.ctb`, which produces uncontracted Grade 1 UEB.
 
+In the BrailleQ pipeline, `python/main.py` sanitizes OCR output before calling
+this Brick. The returned integer cells are then sent to the microcontroller in
+binary chunks; the Brick does not communicate with the display directly.
+
 ## Requirements
 
 The service runs in its own container. Its image installs Flask,
@@ -48,6 +52,11 @@ BrailleClient(
   endpoint before a translation.
 
 Both timeout values must be greater than zero.
+
+`wait_until_ready()` polls `GET /health` every 250 ms when necessary. Each
+translation performs this readiness check before sending its request. A
+connection attempt uses at most two seconds or the remaining readiness time,
+whichever is smaller.
 
 ### `translate`
 
@@ -131,6 +140,26 @@ Example response:
 Invalid requests return a JSON object with an `error` field. Request bodies
 are limited to 64 KiB and input text is limited to 16,000 characters.
 
+| Status | Meaning |
+| --- | --- |
+| `200` | Health check or successful translation. |
+| `400` | Malformed JSON, missing/invalid text, or invalid normalization option. |
+| `404` | Unknown endpoint. |
+| `405` | Method not accepted by an existing endpoint. |
+| `413` | Request body exceeds 64 KiB. |
+| `500` | Liblouis is unavailable, times out, fails, or returns unsupported output. |
+
+The Liblouis subprocess has a 15-second timeout. The Flask service permits
+concurrent HTTP handlers, and each translation starts its own bounded
+`lou_translate` process.
+
+## Startup behaviour
+
+Before listening for requests, the service translates `a` and verifies that
+the configured table produces six-dot cell value `1`. A missing table, missing
+`lou_translate` executable or incompatible display table therefore fails at
+startup rather than during the first user request.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -161,6 +190,9 @@ arduino-app-cli app start user:brailleq --verbose
 ```
 
 Replace `user:brailleq` if the App has a different identifier.
+
+For startup and translation failures, see the project
+[troubleshooting guide](../../docs/troubleshooting.md#braille-translation-problems).
 
 ## Tests
 

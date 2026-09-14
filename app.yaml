@@ -1,5 +1,5 @@
 name: BrailleQ
-description: ""
+description: Capture printed English text, recognize it, and display its six-dot Braille translation
 ports: []
 bricks:
 - paddle_ocr: {}

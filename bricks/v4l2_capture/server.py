@@ -1,3 +1,5 @@
+"""HTTP service for validated, serialized capture from one V4L2 camera."""
+
 from __future__ import annotations
 
 import json
@@ -81,6 +83,7 @@ def _save_debug_capture(image: bytes) -> None:
 
 
 def _capture(payload: dict) -> bytes:
+    """Validate capture options, run v4l2-ctl, and return one JPEG frame."""
     focus_seconds = float(payload.get("focus_seconds", 5.0))
     width = int(payload.get("width", 1920))
     height = int(payload.get("height", 1080))
@@ -159,6 +162,7 @@ def _capture(payload: dict) -> bytes:
 
 
 class Handler(BaseHTTPRequestHandler):
+    """Expose health and capture operations using the standard HTTP server."""
     server_version = "V4L2Capture/1.0"
 
     def _send_json(self, status: int, data: dict) -> None:

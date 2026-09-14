@@ -7,6 +7,7 @@
 
 namespace BrailleQ {
 
+/// Render Braille and workflow indicators on the UNO Q 8x13 LED matrix.
 class BrailleLedMatrixDisplay : public BrailleDisplay {
 public:
   BrailleLedMatrixDisplay(Arduino_LED_Matrix&);

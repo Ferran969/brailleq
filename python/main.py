@@ -1,3 +1,11 @@
+"""Coordinate capture, OCR, quality validation, Braille, and display output.
+
+The Arduino sketch notifies ``take_picture`` through the Router Bridge. The App
+loop then performs one synchronous processing cycle and sends either a retry
+notification or a validated sequence of six-dot Braille cells back to the
+sketch.
+"""
+
 import time
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +21,9 @@ print("Hello world!")
 braille_translator = BrailleClient()
 
 picture_requested = False
+
+# Application-level acceptance threshold. This must be recalibrated when the
+# camera, capture resolution, lighting, or document presentation changes.
 MIN_TEXT_SHARPNESS = 500.0
 
 # TEMPORARY DEBUG CODE: remove this capture archive after camera diagnostics.
@@ -20,6 +31,7 @@ DEBUG_CAPTURE_DIR = Path("debug_captures")
 
 
 def save_debug_capture(image: bytes) -> None:
+    """Save a best-effort development copy without interrupting processing."""
     try:
         DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -38,8 +50,8 @@ def save_debug_capture(image: bytes) -> None:
 
 
 def loop():
-    global picture_requested
     """This function is called repeatedly by the App framework."""
+    global picture_requested
     # You can replace this with any code you want your App to run repeatedly.
     if picture_requested:
         picture_requested = False
@@ -121,6 +133,7 @@ def loop():
 
 # Provision always before running.
 def take_picture() -> None:
+    """Mark one sketch-originated photograph request for the App loop."""
     global picture_requested
     print("Take picture")
     picture_requested = True
@@ -139,6 +152,7 @@ ALLOWED_CHARS = set(
 
 
 def sanitize_english_ocr(text: str) -> str:
+    """Normalize OCR text and retain only the supported English character set."""
     # Normalize things such as full-width ASCII characters.
     text = unicodedata.normalize("NFKC", text)
 
@@ -164,6 +178,7 @@ MAX_CHUNK_BYTES = 180
 
 
 def byte_chunks(data: bytes, max_bytes: int):
+    """Yield ordered slices no larger than the Router Bridge payload limit."""
     if max_bytes <= 0:
         raise ValueError("max_bytes must be greater than zero")
 
@@ -174,6 +189,7 @@ transfer_id = 1
 
 
 def display_braille(cells: bytes) -> None:
+    """Transfer one complete six-dot translation atomically to the sketch."""
     global transfer_id
 
     current_id = transfer_id

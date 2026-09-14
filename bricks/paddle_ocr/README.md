@@ -18,6 +18,21 @@ with it through the Python client in `bricks/paddle_ocr/__init__.py`.
 The current container uses Python 3.13, PaddlePaddle 3.2.1, and the mobile
 PP-OCRv5 detection and recognition models.
 
+Current inference configuration:
+
+| Setting | Value |
+| --- | --- |
+| Device | CPU |
+| Paddle inference threads | 4 |
+| MKL-DNN | Disabled |
+| Document orientation classification | Disabled |
+| Document unwarping | Disabled |
+| Text-line orientation classification | Disabled |
+
+The service handles one OCR request at a time. This avoids concurrent access
+to the shared model instance but means a second request must wait for the first
+one to finish.
+
 ## Quick start
 
 ```python
@@ -51,6 +66,10 @@ Waits until the OCR models have finished loading. A `TimeoutError` is raised if
 the service does not become ready before the timeout. A failed readiness check
 raises `RuntimeError`.
 
+Connection and read timeouts for each readiness request are three and five
+seconds respectively. Repeated startup messages are suppressed until the
+status changes, and polling pauses for up to two seconds between attempts.
+
 ### `recognize`
 
 ```python
@@ -73,6 +92,10 @@ Return values:
 The client raises `RuntimeError` for unsuccessful HTTP responses. Connection
 and request timeout exceptions from `requests` can also propagate to the
 caller.
+
+The OCR upload uses a five-second connection timeout and a 300-second response
+timeout. The latter bounds the complete server-side decode, detection,
+recognition, result extraction and sharpness calculation.
 
 ## Text sharpness
 
@@ -116,6 +139,12 @@ Returns `200` as soon as Flask is alive:
 
 This endpoint does not guarantee that the OCR models are ready.
 
+With the current entrypoint, model initialization occurs before Flask starts
+accepting connections. A connection failure during initial startup is
+therefore expected and is retried by the client. The separate liveness and
+readiness contracts also allow the service lifecycle to be changed later
+without changing clients.
+
 ### Readiness check
 
 ```http
@@ -149,6 +178,32 @@ Example response:
 }
 ```
 
+| Status | Meaning |
+| --- | --- |
+| `200` | Image decoded and OCR response produced. |
+| `400` | Image field missing or encoded image could not be decoded. |
+| `500` | OCR initialization failed. |
+| `503` | Model initialization did not finish within the server wait limit. |
+
+The API is internal to the App and does not currently implement authentication
+or a public upload-size policy. Do not expose port 5000 outside the App network
+without adding appropriate limits and access controls.
+
+## Processing sequence
+
+For each accepted upload, the service:
+
+1. Reads and decodes the complete image.
+2. Executes combined text detection and recognition with `ocr.predict()`.
+3. Extracts fragment text, confidence and recognized polygons.
+4. Creates the joined text returned to the application.
+5. Calculates text-region sharpness from the polygons.
+6. Builds the JSON response.
+
+Recognition confidence and text sharpness measure different properties. A
+high-confidence fragment can come from a visually unsuitable image, and a
+sharp region can still be recognized incorrectly.
+
 ## Configuration
 
 These operational variables are set in `brick_compose.yaml`:
@@ -162,6 +217,24 @@ These operational variables are set in `brick_compose.yaml`:
 
 The host directory `/home/arduino/paddle-cache` is mounted at `/models` so
 models survive container recreation.
+
+## Startup and performance logs
+
+Model import and initialization report their own durations. Every request also
+reports readiness waiting, upload reading, image decoding, PaddleOCR inference,
+result extraction, sharpness calculation, response construction and total
+server time.
+
+The result-extraction timing includes fragment and polygon counts:
+
+```text
+[PERF] OCR request - result extraction: 0.012 s (8 fragments, 8 polygons)
+```
+
+When only some photographs are unusually slow, compare this count with the
+`PaddleOCR predict` duration. Background patterns can create extra candidate
+regions, causing more recognition work. These `[PERF]` lines are temporary
+instrumentation and must not be treated as a stable machine-readable API.
 
 ## Debug output
 
@@ -212,6 +285,9 @@ arduino-app-cli app start user:brailleq --verbose
 ```
 
 Replace `user:brailleq` if the App has a different identifier.
+
+For model-startup, timeout, unexpected-character and sharpness failures, see
+the project [troubleshooting guide](../../docs/troubleshooting.md#ocr-problems).
 
 ## Tests
 

@@ -1,3 +1,5 @@
+"""Serial HTTP OCR service with fragment confidence and sharpness reporting."""
+
 import os
 import threading
 import time
@@ -128,6 +130,7 @@ def _text_region_sharpness(image, polygons):
 
 
 def initialize_ocr():
+    """Load the configured OCR models once and publish initialization state."""
     global ocr, ocr_error
 
     # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
@@ -189,6 +192,7 @@ def initialize_ocr():
 
 @app.get("/health")
 def health():
+    """Report that the Flask process is serving requests."""
     # Flask itself is alive.
     return {
         "status": "alive"
@@ -197,6 +201,7 @@ def health():
 
 @app.get("/ready")
 def ready():
+    """Report whether model initialization completed successfully."""
     if not ocr_ready.is_set():
         return {
             "status": "initializing"
@@ -215,6 +220,7 @@ def ready():
 
 @app.post("/ocr")
 def recognize():
+    """Decode one uploaded image and return OCR fragments and sharpness."""
     # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
     request_started = time.perf_counter()
 

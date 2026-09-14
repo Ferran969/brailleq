@@ -1,3 +1,4 @@
 id: paddle_ocr
 name: Paddle OCR
+description: Detect English text in images and report recognition confidence and text-region sharpness
 variables: []

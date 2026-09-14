@@ -6,8 +6,13 @@
 
 namespace BrailleQ::bridge {
 
+/// Assemble one validated, ordered Braille transfer from the Linux App.
+///
+/// A completed translation is published only after the transfer ID, offsets,
+/// and final size have all been verified.
 class BrailleReceiver {
 public:
+  /// Start a transfer and reserve space for its declared number of cells.
   bool begin(uint32_t id, size_t size) {
     m_id = id;
     m_expectedSize = size;
@@ -19,6 +24,7 @@ public:
     return true;
   }
 
+  /// Append the next chunk when its transfer ID and offset are exact.
   bool chunk(uint32_t id, size_t offset, const MsgPack::bin_t<uint8_t>& chunk) {
     if (!m_receiving)
       return false;
@@ -40,6 +46,7 @@ public:
     return true;
   }
 
+  /// Commit the transfer only when all declared cells have arrived.
   bool end(uint32_t id) {
     if (!m_receiving)
       return false;
@@ -58,12 +65,14 @@ public:
     return true;
   }
 
+  /// Consume the one-shot flag indicating that a new translation is ready.
   bool takeUpdate() {
     bool updated = m_updated;
     m_updated = false;
     return updated;
   }
 
+  /// Return the last complete translation; partial input is never exposed.
   const std::vector<uint8_t>& braille() const & {
     return m_completedText;
   }

@@ -13,6 +13,7 @@ BrailleReceiver displayText;
 bool blurryPicture = false;
 
 void initialize() {
+  // Register every Linux-to-sketch method before normal loop processing.
   Bridge.begin();
   
   Bridge.provide_safe(

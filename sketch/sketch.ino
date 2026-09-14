@@ -1,3 +1,10 @@
+// BrailleQ microcontroller entrypoint.
+//
+// Button B asks the Linux application to capture and translate a photograph.
+// Buttons A and C navigate the validated six-dot cells returned through the
+// Router Bridge. The matrix reserves its left side for workflow status and its
+// right side for the current Braille cell.
+
 #include "src/braille/BrailleCharacter.h"
 #include "src/display/BrailleLedMatrixDisplay.h"
 #include "src/bridge/initialize.h"
@@ -95,11 +102,14 @@ constexpr BrailleQ::BrailleCharacter alphabet[] = {
     {1, 0, 1, 0, 1, 1}, // z  1356
 };
 
+// Index of the Braille cell currently presented on the matrix.
 int textIndex = 0;
 
 unsigned long countdownStart = 0;
 bool hasCountdownStarted = false;
 
+// User-interface timing is non-blocking so Bridge updates and buttons continue
+// to be processed during countdown and loading states.
 bool loading = false;
 unsigned long loadingStart = 0;
 int loadingPhase = -1;

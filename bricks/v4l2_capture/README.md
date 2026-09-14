@@ -87,6 +87,11 @@ continuous autofocus time to converge before selecting a frame.
 Invalid local arguments raise `ValueError`. Service errors, camera failures,
 and unsuccessful HTTP responses are reported as `RuntimeError`.
 
+If the service is still starting, the client retries connection failures up to
+20 times with a 250 ms pause. HTTP errors are not retried because they already
+represent a response from the service. The request timeout is the greater of
+15 seconds or `focus_seconds + 10` seconds.
+
 ### `capture_to_file`
 
 ```python
@@ -152,6 +157,18 @@ A successful request returns `image/jpeg`. Invalid options return JSON with
 HTTP `400`; capture errors return `500`; and capture timeouts return `504`.
 Request bodies are limited to 64 KiB.
 
+| Status | Meaning |
+| --- | --- |
+| `200` | A non-empty JPEG frame was captured. |
+| `400` | Invalid JSON, oversized request or option outside its accepted range. |
+| `404` | Unknown service path. |
+| `500` | Camera configuration, capture or output validation failed. |
+| `504` | `v4l2-ctl` exceeded the capture timeout. |
+
+The HTTP server can receive requests concurrently, but a process-wide camera
+lock serializes configuration and capture. This prevents two requests from
+trying to own the same V4L2 node simultaneously.
+
 ## Camera configuration
 
 The repository default is the Logitech C920 used during development:
@@ -179,6 +196,10 @@ the container. The Python service therefore does not depend on changing
 
 At startup, the service verifies that the mapped path exists, is a character
 device, can be queried as a V4L2 capture node, and supports MJPEG.
+
+The server starts only after that validation succeeds. Its `/health` response
+therefore indicates that startup probing completed, but it does not take a
+test photograph.
 
 If `/dev/v4l/by-id/` is unavailable, `/dev/v4l/by-path/` can provide a path
 associated with a physical USB port.
@@ -225,6 +246,9 @@ arduino-app-cli app start user:brailleq --verbose
 ```
 
 Replace `user:brailleq` if the App has a different identifier.
+
+For device mapping, MJPEG and autofocus failures, see the project
+[troubleshooting guide](../../docs/troubleshooting.md#camera-problems).
 
 ## Tests
 

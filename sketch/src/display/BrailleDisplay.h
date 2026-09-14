@@ -4,6 +4,7 @@
 
 namespace BrailleQ {
 
+/// Hardware-independent operations required by the BrailleQ user interface.
 class BrailleDisplay {
 public:
   virtual ~BrailleDisplay() = default;

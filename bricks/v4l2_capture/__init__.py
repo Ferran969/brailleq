@@ -1,3 +1,5 @@
+"""Synchronous Python client for the internal V4L2 Capture service."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +13,7 @@ _BASE_URL = "http://v4l2_capture:8000"
 
 
 def _post_json(path: str, payload: dict, timeout: float) -> bytes:
+    """POST JSON and return response bytes, retrying startup connection errors."""
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         f"{_BASE_URL}{path}",
@@ -78,7 +81,7 @@ def capture_to_file(
     fps: int = 30,
     autofocus: bool = True,
 ) -> Path:
-    """Capture one frame and write the JPEG bytes to path."""
+    """Capture one frame, write the encoded JPEG bytes, and return its path."""
     output = Path(path)
     output.write_bytes(
         capture_image(

@@ -4,7 +4,7 @@
 
 namespace BrailleQ {
 
-/// For now this is standard literary braille.
+/// Store one standard six-dot Braille cell in dot order 1 through 6.
 class BrailleCharacter {
 public:
   static constexpr std::size_t rows = 3;
@@ -29,6 +29,7 @@ public:
   }
 
 private:
+  /// Indices 0..5 correspond to dots 1..6 and byte bits 0..5.
   bool m_dots[dotCount]{};
 };
 

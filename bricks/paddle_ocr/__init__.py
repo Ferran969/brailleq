@@ -1,3 +1,5 @@
+"""Synchronous Python client for the internal PaddleOCR Brick service."""
+
 import time
 
 import requests
@@ -7,6 +9,7 @@ BASE_URL = "http://paddle_ocr_service:5000"
 
 
 def wait_until_ready(timeout: float = 600) -> None:
+    """Poll the OCR readiness endpoint until success or the overall timeout."""
     deadline = time.monotonic() + timeout
     last_status = "Service has not responded"
     previous_status = None
@@ -46,6 +49,7 @@ def wait_until_ready(timeout: float = 600) -> None:
 
 
 def recognize(image: bytes) -> tuple[str, float | None]:
+    """Recognize an encoded image and return joined text and text sharpness."""
     # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
     total_started = time.perf_counter()
 
