@@ -1,0 +1,100 @@
+FROM debian:trixie-slim AS builder
+
+ARG MNN_VERSION=3.6.1
+ARG MNN_COMMIT=d407447ed56c4121a11ccbd266dc184ca1ead0c2
+ARG DETECTOR_URL=https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar
+ARG DETECTOR_SHA256=781056046c9ed77a15c94681605db6a0f62317c2e9cce6931c71da2478d4bc30
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        curl \
+        git \
+        libprotobuf-dev \
+        ocl-icd-opencl-dev \
+        protobuf-compiler \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --branch "${MNN_VERSION}" --depth 1 \
+        https://github.com/alibaba/MNN.git /opt/MNN \
+    && test "$(git -C /opt/MNN rev-parse HEAD)" = "${MNN_COMMIT}"
+
+RUN cmake -S /opt/MNN -B /opt/MNN/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DMNN_BUILD_BENCHMARK=ON \
+        -DMNN_BUILD_CONVERTER=ON \
+        -DMNN_BUILD_SHARED_LIBS=ON \
+        -DMNN_BUILD_TOOLS=ON \
+        -DMNN_OPENCL=ON \
+        -DMNN_SEP_BUILD=OFF \
+        -DMNN_USE_SYSTEM_LIB=ON \
+    && cmake --build /opt/MNN/build \
+        --parallel 2 \
+        --target \
+            MNNConvert \
+            GetMNNInfo \
+            backendTest.out \
+            benchmark.out \
+            timeProfile.out
+
+COPY mnn_detector_input.cfg /tmp/mnn_detector_input.cfg
+
+RUN mkdir -p /models/onnx /models/mnn /models/benchmark \
+    && curl --location --fail --silent --show-error \
+        "${DETECTOR_URL}" \
+        --output /tmp/detector.tar \
+    && echo "${DETECTOR_SHA256}  /tmp/detector.tar" | sha256sum --check - \
+    && tar -xf /tmp/detector.tar \
+        -C /models/onnx \
+        --strip-components=1 \
+        PP-OCRv5_mobile_det_onnx_infer/inference.onnx \
+        PP-OCRv5_mobile_det_onnx_infer/inference.yml \
+    && /opt/MNN/build/MNNConvert \
+        -f ONNX \
+        --modelFile /models/onnx/inference.onnx \
+        --MNNModel /models/mnn/PP-OCRv5_mobile_det_544x960.mnn \
+        --bizCode BrailleQ \
+        --saveStaticModel \
+        --inputConfigFile /tmp/mnn_detector_input.cfg \
+    && cp /models/mnn/PP-OCRv5_mobile_det_544x960.mnn \
+        /models/benchmark/ \
+    && rm /tmp/detector.tar /tmp/mnn_detector_input.cfg
+
+
+FROM debian:trixie-slim
+
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" \
+        > /etc/apt/sources.list.d/trixie-backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        clinfo \
+        libdrm2 \
+        libstdc++6 \
+        ocl-icd-libopencl1 \
+    && apt-get install -y --no-install-recommends \
+        -t trixie-backports \
+        mesa-libgallium \
+        mesa-opencl-icd \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV RUSTICL_ENABLE=freedreno
+
+COPY --from=builder /opt/MNN/build/*.so* /usr/local/lib/
+COPY --from=builder /opt/MNN/build/GetMNNInfo /usr/local/bin/GetMNNInfo
+COPY --from=builder /opt/MNN/build/backendTest.out /usr/local/bin/backendTest.out
+COPY --from=builder /opt/MNN/build/benchmark.out /usr/local/bin/benchmark.out
+COPY --from=builder /opt/MNN/build/timeProfile.out /usr/local/bin/timeProfile.out
+COPY --from=builder /models /models
+
+COPY run_mnn_detector_benchmark.sh /usr/local/bin/run_mnn_detector_benchmark
+RUN chmod 0755 /usr/local/bin/run_mnn_detector_benchmark
+
+HEALTHCHECK --start-period=15m --interval=15s --timeout=3s --retries=3 \
+    CMD test -f /tmp/mnn-detector-benchmark-passed || exit 1
+
+CMD ["/usr/local/bin/run_mnn_detector_benchmark"]

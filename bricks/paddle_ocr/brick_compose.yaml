@@ -27,3 +27,20 @@ services:
 
     devices:
       - /dev/dri:/dev/dri
+
+  # TEMPORARY GPU MIGRATION: benchmarks the PP-OCRv5 detector with MNN.
+  paddle_ocr_mnn_detector:
+    build:
+      context: .
+      dockerfile: Dockerfile.mnn-detector
+
+    environment:
+      RUSTICL_ENABLE: freedreno
+      MNN_BENCHMARK_LOOPS: "10"
+      MNN_BENCHMARK_WARMUPS: "3"
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    volumes:
+      - /home/arduino/brailleq-captures:/captures

@@ -275,6 +275,68 @@ kernel can execute through Rusticl/freedreno inside an App Lab container. It
 does not yet prove that a PaddleOCR model is compatible or faster; that is the
 next migration step.
 
+## Temporary MNN detector experiment
+
+The `paddle_ocr_mnn_detector` service performs the first real-model GPU test
+without replacing the CPU OCR service. Its build:
+
+1. Checks out MNN 3.6.1 at the pinned commit recorded in the Dockerfile.
+2. Downloads the official `PP-OCRv5_mobile_det` ONNX archive and verifies its
+   SHA-256 checksum.
+3. Converts the dynamic ONNX model into a static MNN model with shape
+   `1x3x544x960`, matching a 1920x1080 image resized to a 960-pixel long side.
+4. Includes the MNN CPU and OpenCL backends in the same executable.
+
+At container startup it compares OpenCL output with CPU output, benchmarks both
+backends with the same converted model, and records an OpenCL per-operation
+profile. Find the container with:
+
+```bash
+docker ps --filter name=paddle_ocr_mnn_detector --format '{{.Names}}'
+```
+
+Inspect its logs:
+
+```bash
+docker logs CONTAINER_NAME
+```
+
+A completed experiment ends with:
+
+```text
+[MNN DETECTOR] PASS detector conversion and CPU/OpenCL benchmark completed
+```
+
+The service is healthy only after conversion correctness and all benchmark
+commands succeed:
+
+```bash
+docker inspect \
+  --format '{{.State.Health.Status}}' \
+  CONTAINER_NAME
+```
+
+Detailed results are exposed on the UNO Q host at:
+
+```text
+/home/arduino/brailleq-captures/mnn-detector-benchmark/
+```
+
+The important files are:
+
+| File | Purpose |
+| --- | --- |
+| `backend_correctness.txt` | Compares OpenCL numerical output with CPU. |
+| `cpu_benchmark.txt` | CPU inference timing with four threads. |
+| `opencl_benchmark.txt` | OpenCL inference timing. |
+| `opencl_profile.txt` | Per-operation OpenCL profile. |
+| `model_info.txt` | Converted model inputs, outputs, and metadata. |
+| `environment.txt` | Exact MNN, model, Mesa, and benchmark configuration. |
+
+This experiment measures raw detector inference with generated input. It does
+not yet decode a photograph or apply DB postprocessing, and it does not include
+the recognition model. Those stages belong to the complete GPU OCR integration.
+
 ## Limitations
 
 - Inference currently runs on the CPU.
