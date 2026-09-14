@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -129,17 +130,27 @@ def _text_region_sharpness(image, polygons):
 def initialize_ocr():
     global ocr, ocr_error
 
+    # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
+    initialization_started = time.perf_counter()
+
     try:
+        phase_started = time.perf_counter()
         print("Importing PaddleOCR...", flush=True)
         from paddleocr import PaddleOCR
+        print(
+            "[PERF] PaddleOCR import: "
+            f"{time.perf_counter() - phase_started:.3f} s",
+            flush=True,
+        )
 
         print("Loading OCR models...", flush=True)
 
         print(
-            "OCR configuration: CPU, MKL-DNN disabled, 1 inference thread",
+            "OCR configuration: CPU, MKL-DNN disabled, 4 inference threads",
             flush=True,
         )
-        
+
+        phase_started = time.perf_counter()
         ocr = PaddleOCR(
             text_detection_model_name="PP-OCRv5_mobile_det",
             text_recognition_model_name="PP-OCRv5_mobile_rec",
@@ -152,6 +163,11 @@ def initialize_ocr():
             use_doc_unwarping=False,
             use_textline_orientation=False,
         )
+        print(
+            "[PERF] PaddleOCR model loading: "
+            f"{time.perf_counter() - phase_started:.3f} s",
+            flush=True,
+        )
         print("PaddleOCR ready", flush=True)
 
     except Exception as error:
@@ -163,6 +179,11 @@ def initialize_ocr():
         )
 
     finally:
+        print(
+            "[PERF] PaddleOCR initialization total: "
+            f"{time.perf_counter() - initialization_started:.3f} s",
+            flush=True,
+        )
         ocr_ready.set()
 
 
@@ -194,12 +215,21 @@ def ready():
 
 @app.post("/ocr")
 def recognize():
+    # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
+    request_started = time.perf_counter()
+
     # Connection succeeds immediately because Flask is already running.
     # If PaddleOCR is still loading, this request waits here.
+    phase_started = time.perf_counter()
     if not ocr_ready.wait(timeout=300):
         return {
             "error": "OCR initialization timed out"
         }, 503
+    ready_wait_seconds = time.perf_counter() - phase_started
+    print(
+        f"[PERF] OCR request - readiness wait: {ready_wait_seconds:.3f} s",
+        flush=True,
+    )
 
     if ocr_error is not None:
         return {
@@ -211,20 +241,46 @@ def recognize():
             "error": "No image supplied"
         }, 400
 
+    phase_started = time.perf_counter()
     image_bytes = request.files["image"].read()
+    upload_read_seconds = time.perf_counter() - phase_started
+    print(
+        "[PERF] OCR request - uploaded image read: "
+        f"{upload_read_seconds:.3f} s ({len(image_bytes)} bytes)",
+        flush=True,
+    )
 
+    phase_started = time.perf_counter()
     image = cv2.imdecode(
         np.frombuffer(image_bytes, dtype=np.uint8),
         cv2.IMREAD_COLOR,
     )
+    decode_seconds = time.perf_counter() - phase_started
 
     if image is None:
         return {
             "error": "Could not decode image"
         }, 400
 
-    results = ocr.predict(image)
+    height, width = image.shape[:2]
+    print(
+        "[PERF] OCR request - image decode: "
+        f"{decode_seconds:.3f} s ({width}x{height})",
+        flush=True,
+    )
 
+    phase_started = time.perf_counter()
+    # Materialize the result so this timing also covers inference if the
+    # installed PaddleOCR version returns a lazy iterator.
+    results = list(ocr.predict(image))
+    predict_seconds = time.perf_counter() - phase_started
+    print(
+        "[PERF] OCR request - PaddleOCR predict "
+        f"(detection + recognition): {predict_seconds:.3f} s",
+        flush=True,
+    )
+
+    phase_started = time.perf_counter()
     lines = []
     fragments = []
     text_polygons = []
@@ -248,17 +304,52 @@ def recognize():
         if polygons is None:
             polygons = data.get("dt_polys", [])
         text_polygons.extend(polygons)
+    result_processing_seconds = time.perf_counter() - phase_started
+    print(
+        "[PERF] OCR request - result extraction: "
+        f"{result_processing_seconds:.3f} s "
+        f"({len(fragments)} fragments, {len(text_polygons)} polygons)",
+        flush=True,
+    )
 
     # TEMPORARY DEBUG CODE: remove after OCR-region diagnostics are complete.
+    phase_started = time.perf_counter()
     _save_detection_overlay(image, text_polygons)
-    text_sharpness = _text_region_sharpness(image, text_polygons)
+    overlay_seconds = time.perf_counter() - phase_started
+    print(
+        "[PERF] OCR request - detection overlay: "
+        f"{overlay_seconds:.3f} s",
+        flush=True,
+    )
 
-    return jsonify({
+    phase_started = time.perf_counter()
+    text_sharpness = _text_region_sharpness(image, text_polygons)
+    sharpness_seconds = time.perf_counter() - phase_started
+    print(
+        "[PERF] OCR request - text sharpness: "
+        f"{sharpness_seconds:.3f} s",
+        flush=True,
+    )
+
+    phase_started = time.perf_counter()
+    response = jsonify({
         "text": "\n".join(lines),
         "lines": lines,
         "fragments": fragments,
         "text_sharpness": text_sharpness,
     })
+    response_seconds = time.perf_counter() - phase_started
+    total_seconds = time.perf_counter() - request_started
+    print(
+        "[PERF] OCR request - JSON response build: "
+        f"{response_seconds:.3f} s",
+        flush=True,
+    )
+    print(
+        f"[PERF] OCR request - total server time: {total_seconds:.3f} s",
+        flush=True,
+    )
+    return response
 
 
 if __name__ == "__main__":

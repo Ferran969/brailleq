@@ -46,8 +46,18 @@ def wait_until_ready(timeout: float = 600) -> None:
 
 
 def recognize(image: bytes) -> tuple[str, float | None]:
-    wait_until_ready()
+    # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
+    total_started = time.perf_counter()
 
+    phase_started = time.perf_counter()
+    wait_until_ready()
+    print(
+        "[PERF] OCR client - readiness check: "
+        f"{time.perf_counter() - phase_started:.3f} s",
+        flush=True,
+    )
+
+    phase_started = time.perf_counter()
     response = requests.post(
         f"{BASE_URL}/ocr",
         files={
@@ -59,6 +69,11 @@ def recognize(image: bytes) -> tuple[str, float | None]:
         },
         timeout=(5, 300),
     )
+    print(
+        "[PERF] OCR client - HTTP request including server processing: "
+        f"{time.perf_counter() - phase_started:.3f} s",
+        flush=True,
+    )
 
     if not response.ok:
         raise RuntimeError(
@@ -66,7 +81,13 @@ def recognize(image: bytes) -> tuple[str, float | None]:
             f"{response.text}"
         )
 
+    phase_started = time.perf_counter()
     data = response.json()
+    print(
+        "[PERF] OCR client - JSON response decode: "
+        f"{time.perf_counter() - phase_started:.3f} s",
+        flush=True,
+    )
 
     for fragment in data.get("fragments", []):
         text = fragment["text"]
@@ -79,5 +100,11 @@ def recognize(image: bytes) -> tuple[str, float | None]:
     text_sharpness = data.get("text_sharpness")
     if text_sharpness is not None:
         text_sharpness = float(text_sharpness)
+
+    print(
+        "[PERF] OCR client - total: "
+        f"{time.perf_counter() - total_started:.3f} s",
+        flush=True,
+    )
 
     return data["text"], text_sharpness

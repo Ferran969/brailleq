@@ -43,9 +43,31 @@ def loop():
     # You can replace this with any code you want your App to run repeatedly.
     if picture_requested:
         picture_requested = False
+
+        # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
+        phase_started = time.perf_counter()
         image = capture_image(5)
+        print(
+            "[PERF] Application - camera capture: "
+            f"{time.perf_counter() - phase_started:.3f} s",
+            flush=True,
+        )
+
+        phase_started = time.perf_counter()
         save_debug_capture(image)
+        print(
+            "[PERF] Application - raw debug capture save: "
+            f"{time.perf_counter() - phase_started:.3f} s",
+            flush=True,
+        )
+
+        phase_started = time.perf_counter()
         text, text_sharpness = recognize(image)
+        print(
+            "[PERF] Application - complete OCR call: "
+            f"{time.perf_counter() - phase_started:.3f} s",
+            flush=True,
+        )
 
         if (
             text_sharpness is None
