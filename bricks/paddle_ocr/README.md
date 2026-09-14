@@ -189,6 +189,92 @@ For raw detector probability maps, threshold masks, and heatmaps, use
 `tools/debug_detection.py`. The production service works with PaddleOCR's
 postprocessed text polygons and does not expose its raw probability map.
 
+## Temporary CPU baseline
+
+Before replacing the inference engine, use `benchmark_cpu.py` to record a
+repeatable CPU baseline on the UNO Q. Put a fixed set of representative raw
+photographs in this host directory, without OCR overlay images:
+
+```text
+/home/arduino/brailleq-captures/baseline
+```
+
+Find the running PaddleOCR container:
+
+```bash
+docker ps --filter name=paddle_ocr_service --format '{{.Names}}'
+```
+
+Then run the benchmark inside that container, replacing `CONTAINER_NAME` with
+the name printed by the previous command:
+
+```bash
+docker exec -it CONTAINER_NAME \
+  python /app/benchmark_cpu.py \
+  --image-dir /captures/baseline \
+  --warmups 1 \
+  --runs 3
+```
+
+The first request warms up the runtime and is not measured. Every image is then
+processed three times. The JSON report is available inside the container at
+`/captures/benchmarks/cpu_baseline.json` and on the host at:
+
+```text
+/home/arduino/brailleq-captures/benchmarks/cpu_baseline.json
+```
+
+It records client and server timings, PaddleOCR prediction time, image hashes
+and dimensions, recognized text and confidence, sharpness, and fragment and
+polygon counts. Reuse the exact same images and hashes when benchmarking a
+future GPU implementation.
+
+## Temporary OpenCL verification
+
+The experimental `paddle_ocr_opencl_probe` service checks GPU access without
+changing the production CPU OCR service. It uses Mesa Rusticl with the
+`freedreno` driver and receives `/dev/dri` from the host.
+
+During startup it performs three checks:
+
+1. At least one `/dev/dri/renderD*` character device is visible.
+2. `clinfo` can enumerate an OpenCL GPU.
+3. A small vector-add kernel compiles, executes on that GPU, and returns the
+   expected values.
+
+After rebuilding the App, find the probe container:
+
+```bash
+docker ps --filter name=paddle_ocr_opencl_probe --format '{{.Names}}'
+```
+
+Inspect its startup output, replacing `CONTAINER_NAME` with the returned name:
+
+```bash
+docker logs CONTAINER_NAME
+```
+
+A successful result includes device information followed by lines similar to:
+
+```text
+[OPENCL PROBE] Device: FD702
+[OPENCL PROBE] PASS elements=1024 max_error=0 kernel_ms=...
+[OPENCL PROBE] Verification completed successfully
+```
+
+Also confirm that Docker considers the service healthy:
+
+```bash
+docker inspect \
+  --format '{{.State.Health.Status}}' \
+  CONTAINER_NAME
+```
+
+The expected value is `healthy`. A passing probe proves that a real OpenCL
+kernel can execute through Rusticl/freedreno inside an App Lab container. It
+does not yet prove that a PaddleOCR model is compatible or faster; that is the
+next migration step.
+
 ## Limitations
 
 - Inference currently runs on the CPU.

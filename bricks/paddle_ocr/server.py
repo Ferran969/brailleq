@@ -19,6 +19,7 @@ ocr_ready = threading.Event()
 
 MIN_REGION_AREA_RATIO = 0.02
 DEBUG_OVERLAY_DIR = Path(os.getenv("DEBUG_OVERLAY_DIR", "/captures"))
+OCR_CPU_THREADS = 4
 
 
 def _weighted_median(values, weights):
@@ -146,7 +147,8 @@ def initialize_ocr():
         print("Loading OCR models...", flush=True)
 
         print(
-            "OCR configuration: CPU, MKL-DNN disabled, 4 inference threads",
+            "OCR configuration: CPU, MKL-DNN disabled, "
+            f"{OCR_CPU_THREADS} inference threads",
             flush=True,
         )
 
@@ -157,7 +159,7 @@ def initialize_ocr():
         
             device="cpu",
             enable_mkldnn=False,
-            cpu_threads=4,
+            cpu_threads=OCR_CPU_THREADS,
         
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
@@ -331,13 +333,39 @@ def recognize():
         flush=True,
     )
 
-    phase_started = time.perf_counter()
-    response = jsonify({
+    server_seconds_before_response = time.perf_counter() - request_started
+    payload = {
         "text": "\n".join(lines),
         "lines": lines,
         "fragments": fragments,
         "text_sharpness": text_sharpness,
-    })
+        # TEMPORARY PERFORMANCE DIAGNOSTICS: the benchmark client records this
+        # object so the CPU and GPU implementations can be compared later.
+        "debug_performance": {
+            "backend": "paddlepaddle_cpu",
+            "cpu_threads": OCR_CPU_THREADS,
+            "image": {
+                "bytes": len(image_bytes),
+                "width": width,
+                "height": height,
+            },
+            "result_count": len(results),
+            "fragment_count": len(fragments),
+            "polygon_count": len(text_polygons),
+            "seconds": {
+                "read_upload": upload_read_seconds,
+                "decode": decode_seconds,
+                "predict": predict_seconds,
+                "result_extraction": result_processing_seconds,
+                "overlay": overlay_seconds,
+                "text_sharpness": sharpness_seconds,
+                "before_response": server_seconds_before_response,
+            },
+        },
+    }
+
+    phase_started = time.perf_counter()
+    response = jsonify(payload)
     response_seconds = time.perf_counter() - phase_started
     total_seconds = time.perf_counter() - request_started
     print(

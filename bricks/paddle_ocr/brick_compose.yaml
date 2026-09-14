@@ -15,3 +15,15 @@ services:
 
     ports:
       - 5000
+
+  # TEMPORARY GPU MIGRATION PROBE: remove after choosing the inference engine.
+  paddle_ocr_opencl_probe:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencl-probe
+
+    environment:
+      RUSTICL_ENABLE: freedreno
+
+    devices:
+      - /dev/dri:/dev/dri

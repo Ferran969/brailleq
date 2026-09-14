@@ -1,0 +1,36 @@
+FROM python:3.13-slim-trixie
+
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" \
+        > /etc/apt/sources.list.d/trixie-backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        clinfo \
+        gcc \
+        libc6-dev \
+        libdrm2 \
+        ocl-icd-libopencl1 \
+        ocl-icd-opencl-dev \
+    && apt-get install -y --no-install-recommends \
+        -t trixie-backports \
+        mesa-libgallium \
+        mesa-opencl-icd \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTICL_ENABLE=freedreno
+
+COPY opencl_probe.c /tmp/opencl_probe.c
+RUN cc -std=c11 -O2 -Wall -Wextra \
+        /tmp/opencl_probe.c \
+        -o /usr/local/bin/opencl_probe \
+        -lOpenCL \
+        -lm \
+    && rm /tmp/opencl_probe.c
+
+COPY run_opencl_probe.sh /usr/local/bin/run_opencl_probe
+RUN chmod 0755 /usr/local/bin/run_opencl_probe
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD test -f /tmp/opencl-probe-passed || exit 1
+
+CMD ["/usr/local/bin/run_opencl_probe"]

@@ -20,6 +20,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY server.py /app/server.py
+COPY benchmark_cpu.py /app/benchmark_cpu.py
 
 EXPOSE 5000
 
