@@ -96,38 +96,24 @@ Check:
 - Network access from the OCR container.
 - Available storage for `/home/arduino/paddle-cache`.
 - Available RAM.
-- Whether the log reaches `PaddleOCR ready`.
-- The reported import and model-loading durations.
+- Whether the log reaches `PaddleOCR ready` or reports an initialization error.
 
 The client can wait up to 600 seconds for readiness. Increasing that timeout
 does not repair a failed download or initialization exception.
 
 ### OCR sometimes takes about a minute
 
-Use the timing lines to locate the delay:
-
-```text
-[PERF] OCR request - readiness wait
-[PERF] OCR request - uploaded image read
-[PERF] OCR request - image decode
-[PERF] OCR request - PaddleOCR predict (detection + recognition)
-[PERF] OCR request - result extraction
-[PERF] OCR request - total server time
-```
-
-If `PaddleOCR predict` dominates, compare the fragment and polygon counts
-reported by result extraction. An image containing patterns, labels or
-background details can generate many candidate text regions, and each region
-may require recognition.
+First determine whether the delay happens only on the first request. The model
+may still be initializing; the log reports `PaddleOCR ready` when it can accept
+OCR work. If only some photographs are slow, backgrounds and patterns may be
+creating many candidate text regions, each of which requires recognition.
 
 The current inference configuration is CPU-only with four threads. Capture
 resolution is 1920×1080, although the detector may resize internally. Before
 changing models or hardware, compare the same clear and slow photographs and
-record resolution, inference time and detected-region count.
-
-If `readiness wait` dominates, the request arrived before model initialization
-finished. If another phase dominates, changing the inference engine will not
-address that part of the delay.
+record resolution and total response time. Add temporary profiling around
+`ocr.predict()` only when a precise phase measurement is needed; verbose
+performance timings are not emitted during normal operation.
 
 ### OCR request times out
 
@@ -222,7 +208,7 @@ Check:
 - That `Bridge.begin()` completed.
 - That the sketch log shows normal startup.
 - That the Python application registered `take_picture`.
-- Whether `Take picture` appears in the application output.
+- Whether a capture is saved under `/home/arduino/brailleq-captures`.
 
 The sketch sends one notification on the transition from released to pressed;
 holding B does not repeatedly request captures.

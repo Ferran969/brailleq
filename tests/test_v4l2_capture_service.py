@@ -4,6 +4,7 @@ import importlib.util
 import stat
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,6 +74,19 @@ class CameraDeviceValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "required MJPEG format"):
             server._validate_camera_device()
+
+
+class CaptureArchiveTests(unittest.TestCase):
+    def test_save_capture_archives_jpeg_bytes(self) -> None:
+        image = b"\xff\xd8example-jpeg"
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(server, "CAPTURE_ARCHIVE_DIR", Path(directory)):
+                server._save_capture(image)
+
+            captures = list(Path(directory).glob("capture_*.jpg"))
+            self.assertEqual(len(captures), 1)
+            self.assertEqual(captures[0].read_bytes(), image)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,6 @@ services:
       - "${CAMERA_HOST_DEVICE:-/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_E24E2F9F-video-index0}:/dev/brailleq-camera"
     environment:
       CAMERA_DEVICE: /dev/brailleq-camera
-      DEBUG_CAPTURE_DIR: /captures
+      CAPTURE_ARCHIVE_DIR: /captures
     volumes:
       - "/home/arduino/brailleq-captures:/captures"

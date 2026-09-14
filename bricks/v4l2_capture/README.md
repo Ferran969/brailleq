@@ -192,7 +192,7 @@ the container. The Python service therefore does not depend on changing
 | --- | --- | --- | --- |
 | `CAMERA_HOST_DEVICE` | Logitech C920 `by-id` path | Brick | Stable camera path on the Arduino host. |
 | `CAMERA_DEVICE` | `/dev/brailleq-camera` | Internal | Fixed device path inside the container. |
-| `DEBUG_CAPTURE_DIR` | `/captures` | Internal | Temporary raw-capture archive directory. |
+| `CAPTURE_ARCHIVE_DIR` | `/captures` | Internal | Directory where successful captures are archived. |
 
 At startup, the service verifies that the mapped path exists, is a character
 device, can be queried as a V4L2 capture node, and supports MJPEG.
@@ -204,10 +204,10 @@ test photograph.
 If `/dev/v4l/by-id/` is unavailable, `/dev/v4l/by-path/` can provide a path
 associated with a physical USB port.
 
-## Debug output
+## Saved captures
 
-Temporary debugging code archives every successful raw capture inside the
-container using names such as:
+The service archives every successful raw capture inside the container using
+names such as:
 
 ```text
 /captures/capture_20260913_034835_263667.jpg
@@ -219,8 +219,9 @@ The shared volume exposes the files on the Arduino host at:
 /home/arduino/brailleq-captures
 ```
 
-A debug-copy failure is logged but does not prevent the image from being sent
-to OCR. This archive should be removed after camera diagnostics are complete.
+An archive failure is logged but does not prevent the image from being sent to
+OCR. PaddleOCR processes these bytes directly and does not save an additional
+copy or text-region overlay.
 
 ## Limitations
 

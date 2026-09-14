@@ -16,7 +16,12 @@ from pathlib import Path
 HOST = "0.0.0.0"
 PORT = 8000
 DEVICE = os.getenv("CAMERA_DEVICE", "/dev/brailleq-camera")
-DEBUG_CAPTURE_DIR = Path(os.getenv("DEBUG_CAPTURE_DIR", "/captures"))
+CAPTURE_ARCHIVE_DIR = Path(
+    os.getenv(
+        "CAPTURE_ARCHIVE_DIR",
+        os.getenv("DEBUG_CAPTURE_DIR", "/captures"),
+    )
+)
 
 # One process should own/configure the camera at a time.
 _camera_lock = threading.Lock()
@@ -63,21 +68,21 @@ def _validate_camera_device() -> None:
         )
 
 
-def _save_debug_capture(image: bytes) -> None:
-    """Temporarily archive every successful capture in the shared volume."""
+def _save_capture(image: bytes) -> None:
+    """Archive every successful capture in the shared volume."""
     try:
-        DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+        CAPTURE_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        capture_path = DEBUG_CAPTURE_DIR / f"capture_{timestamp}.jpg"
+        capture_path = CAPTURE_ARCHIVE_DIR / f"capture_{timestamp}.jpg"
         capture_path.write_bytes(image)
         print(
-            f"[v4l2_capture] debug image saved to {capture_path}",
+            f"[v4l2_capture] image saved to {capture_path}",
             flush=True,
         )
     except OSError as error:
-        # A debug-copy failure must not prevent OCR from receiving the image.
+        # An archive failure must not prevent OCR from receiving the image.
         print(
-            f"[v4l2_capture] could not save debug image: {error}",
+            f"[v4l2_capture] could not save image: {error}",
             flush=True,
         )
 
@@ -151,8 +156,7 @@ def _capture(payload: dict) -> bytes:
                 "(missing JPEG SOI marker)"
             )
 
-        # TEMPORARY DEBUG CODE: remove after camera diagnostics are complete.
-        _save_debug_capture(image)
+        _save_capture(image)
         return image
     finally:
         try:
@@ -214,7 +218,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": str(exc)})
 
     def log_message(self, fmt: str, *args) -> None:
-        print(f"[v4l2_capture] {self.address_string()} - {fmt % args}", flush=True)
+        """Suppress the standard per-request HTTP access log."""
 
 
 if __name__ == "__main__":

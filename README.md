@@ -246,24 +246,23 @@ Python application or sketch changes may follow a shorter App Lab development
 cycle, but a clean rebuild is the reliable option when container contents have
 changed.
 
-## Logs and performance timings
+## Runtime output and saved images
 
-The current development build reports the duration of important phases:
+The application reports each detected OCR fragment together with its model
+confidence:
 
 ```text
-[PERF] Application - camera capture: ...
-[PERF] OCR request - readiness wait: ...
-[PERF] OCR request - PaddleOCR predict (detection + recognition): ...
-[PERF] OCR request - result extraction: ...
-[PERF] OCR request - total server time: ...
+[OCR] Texto detectado:
+[OCR] 98.4% | "Example text"
 ```
 
-The result-extraction line also reports the number of fragments and polygons.
-This is useful when a particular image is much slower than another: a scene
-with many false text detections can cause many recognition operations.
+It also reports whether the text sharpness passed the configured quality
+threshold. Startup, readiness and error messages remain visible, while
+per-phase performance and HTTP access logs are disabled by default.
 
-These messages are temporary performance instrumentation and are not a stable
-API. Do not write application logic that parses them.
+Every successful camera capture is saved on the Arduino host under
+`/home/arduino/brailleq-captures`. The PaddleOCR Brick does not save a second
+image or a text-region overlay.
 
 ## Tests
 

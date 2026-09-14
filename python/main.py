@@ -6,17 +6,14 @@ notification or a validated sequence of six-dot Braille cells back to the
 sketch.
 """
 
-import time
-from datetime import datetime
-from pathlib import Path
+import string
+import unicodedata
 
 from arduino.app_utils import App, Bridge
 
+from braille import BrailleClient
 from paddle_ocr import recognize
 from v4l2_capture import capture_image
-from braille import BrailleClient
-
-print("Hello world!")
 
 braille_translator = BrailleClient()
 
@@ -26,28 +23,6 @@ picture_requested = False
 # camera, capture resolution, lighting, or document presentation changes.
 MIN_TEXT_SHARPNESS = 500.0
 
-# TEMPORARY DEBUG CODE: remove this capture archive after camera diagnostics.
-DEBUG_CAPTURE_DIR = Path("debug_captures")
-
-
-def save_debug_capture(image: bytes) -> None:
-    """Save a best-effort development copy without interrupting processing."""
-    try:
-        DEBUG_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        capture_path = DEBUG_CAPTURE_DIR / f"capture_{timestamp}.jpg"
-        capture_path.write_bytes(image)
-        print(
-            f"[DEBUG CAPTURE] Fotografía guardada en {capture_path.resolve()}",
-            flush=True,
-        )
-    except OSError as error:
-        # Saving a debug copy must not prevent OCR from processing the image.
-        print(
-            f"[DEBUG CAPTURE] No se pudo guardar la fotografía: {error}",
-            flush=True,
-        )
-
 
 def loop():
     """This function is called repeatedly by the App framework."""
@@ -56,30 +31,8 @@ def loop():
     if picture_requested:
         picture_requested = False
 
-        # TEMPORARY PERFORMANCE DIAGNOSTICS: remove after OCR profiling.
-        phase_started = time.perf_counter()
         image = capture_image(5)
-        print(
-            "[PERF] Application - camera capture: "
-            f"{time.perf_counter() - phase_started:.3f} s",
-            flush=True,
-        )
-
-        phase_started = time.perf_counter()
-        save_debug_capture(image)
-        print(
-            "[PERF] Application - raw debug capture save: "
-            f"{time.perf_counter() - phase_started:.3f} s",
-            flush=True,
-        )
-
-        phase_started = time.perf_counter()
         text, text_sharpness = recognize(image)
-        print(
-            "[PERF] Application - complete OCR call: "
-            f"{time.perf_counter() - phase_started:.3f} s",
-            flush=True,
-        )
 
         if (
             text_sharpness is None
@@ -98,7 +51,7 @@ def loop():
                 flush=True,
             )
 
-            Bridge.notify("blurry_picture");
+            Bridge.notify("blurry_picture")
 
             # TODO(LED): sustituir el print por una notificación al sketch
             # para indicar mediante los LEDs que debe repetirse la fotografía.
@@ -117,14 +70,10 @@ def loop():
         # indicar mediante los LEDs que la fotografía ha sido aceptada.
         # Bridge.call("photo_quality", True)
 
-        print("Recognized text:")
-        print(text)
         sanitized = sanitize_english_ocr(text)
-        print("Sanitized text:")
-        print(sanitized)
         translation = braille_translator.translate(sanitized)
         braille_cells = bytes(translation.cells)
-        
+
         display_braille(braille_cells)
 
 
@@ -135,12 +84,7 @@ def loop():
 def take_picture() -> None:
     """Mark one sketch-originated photograph request for the App loop."""
     global picture_requested
-    print("Take picture")
     picture_requested = True
-
-
-import string
-import unicodedata
 
 
 ALLOWED_CHARS = set(
@@ -185,6 +129,7 @@ def byte_chunks(data: bytes, max_bytes: int):
     for start in range(0, len(data), max_bytes):
         yield data[start:start + max_bytes]
 
+
 transfer_id = 1
 
 
@@ -209,6 +154,7 @@ def display_braille(cells: bytes) -> None:
         offset += len(chunk)
 
     Bridge.call("braille_end", current_id)
+
 
 Bridge.provide("take_picture", take_picture)
 

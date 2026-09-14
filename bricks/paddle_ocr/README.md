@@ -213,50 +213,23 @@ These operational variables are set in `brick_compose.yaml`:
 | `PADDLE_PDX_CACHE_HOME` | `/models` | Paddle model cache directory. |
 | `PADDLE_PDX_MODEL_SOURCE` | `bos` | Paddle model download source. |
 | `PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK` | `True` | Disables the model-source availability check. |
-| `DEBUG_OVERLAY_DIR` | `/captures` | Directory used for temporary text-detection overlays. |
 
 The host directory `/home/arduino/paddle-cache` is mounted at `/models` so
 models survive container recreation.
 
-## Startup and performance logs
+## Runtime output
 
-Model import and initialization report their own durations. Every request also
-reports readiness waiting, upload reading, image decoding, PaddleOCR inference,
-result extraction, sharpness calculation, response construction and total
-server time.
-
-The result-extraction timing includes fragment and polygon counts:
+The Python client prints the text and confidence returned for each recognized
+fragment:
 
 ```text
-[PERF] OCR request - result extraction: 0.012 s (8 fragments, 8 polygons)
+[OCR] Texto detectado:
+[OCR] 98.4% | "Example text"
 ```
 
-When only some photographs are unusually slow, compare this count with the
-`PaddleOCR predict` duration. Background patterns can create extra candidate
-regions, causing more recognition work. These `[PERF]` lines are temporary
-instrumentation and must not be treated as a stable machine-readable API.
-
-## Debug output
-
-Temporary debugging code saves a copy of every processed image with all
-detected text polygons highlighted in green. This includes polygons later
-ignored by the 2% sharpness-area filter.
-
-Inside the container, files are written as:
-
-```text
-/captures/ocr_overlay_YYYYMMDD_HHMMSS_microseconds.jpg
-```
-
-The shared volume exposes them on the Arduino host at:
-
-```text
-/home/arduino/brailleq-captures
-```
-
-Failure to save an overlay is logged but does not fail the OCR request. The
-overlay archive is temporary and should be removed after diagnostics are
-complete.
+If no fragments are returned, it prints `[OCR] No se ha detectado texto.`.
+Model startup, readiness changes and failures are also logged. The service does
+not save an intermediate image containing the detected text polygons.
 
 For raw detector probability maps, threshold masks, and heatmaps, use
 `tools/debug_detection.py`. The production service works with PaddleOCR's
