@@ -1,3 +1,4 @@
+
 # 😀 BrailleQ
 
 BrailleQ is an Arduino App Lab project that photographs printed English text,
@@ -12,6 +13,11 @@ controls and a USB V4L2 camera supplies the image.
 > BrailleQ is under active development. It currently supports English,
 > uncontracted six-dot Braille and one photograph at a time. It is not an
 > assistive product certified for safety-critical use.
+
+## Team
+
+- Ferran Mesas — Universitat Politècnica de Catalunya (UPC)
+- Dongwei Li — Universitat Politècnica de Catalunya (UPC)
 
 ## System overview
 
@@ -49,6 +55,9 @@ See [Architecture](docs/architecture.md) for component boundaries, data formats,
 startup behaviour and the complete request sequence.
 
 ## Hardware requirements
+
+BrailleQ uses commercially available modules. The current prototype does not
+require a custom PCB or project-specific 3D-printed parts.
 
 - Arduino UNO Q supported by Arduino App Lab.
 - Arduino LED matrix available to the sketch.
