@@ -13,7 +13,7 @@ print("Hello world!")
 braille_translator = BrailleClient()
 
 picture_requested = False
-MIN_TEXT_SHARPNESS = 100.0
+MIN_TEXT_SHARPNESS = 500.0
 
 # TEMPORARY DEBUG CODE: remove this capture archive after camera diagnostics.
 DEBUG_CAPTURE_DIR = Path("debug_captures")
