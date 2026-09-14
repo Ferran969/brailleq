@@ -7,21 +7,21 @@ map that is normally hidden by PaddleOCR's high-level `predict()` API.
 Run it from the repository root with the PaddleOCR virtual environment:
 
 ```sh
-/home/li/venvs/paddleocr/bin/python tools/debug_detection.py IMAGE.jpg
+python tools/debug_detection.py IMAGE.jpg
 ```
 
 The script automatically checks the model location currently used on this
 machine. A different model directory can be supplied explicitly:
 
 ```sh
-/home/li/venvs/paddleocr/bin/python tools/debug_detection.py IMAGE.jpg \
+python tools/debug_detection.py IMAGE.jpg \
   --model-dir /path/to/PP-OCRv5_mobile_det_infer
 ```
 
 To compare other binarization thresholds:
 
 ```sh
-/home/li/venvs/paddleocr/bin/python tools/debug_detection.py IMAGE.jpg \
+python tools/debug_detection.py IMAGE.jpg \
   --thresholds 0.1 0.2 0.3 0.4 0.5
 ```
 

@@ -27,7 +27,6 @@ MIN_TEXT_SHARPNESS = 500.0
 def loop():
     """This function is called repeatedly by the App framework."""
     global picture_requested
-    # You can replace this with any code you want your App to run repeatedly.
     if picture_requested:
         picture_requested = False
 
@@ -52,10 +51,6 @@ def loop():
             )
 
             Bridge.notify("blurry_picture")
-
-            # TODO(LED): sustituir el print por una notificación al sketch
-            # para indicar mediante los LEDs que debe repetirse la fotografía.
-            # Bridge.call("photo_quality", False)
             return
 
         print(
@@ -66,10 +61,6 @@ def loop():
             flush=True,
         )
 
-        # TODO(LED): sustituir el print por una notificación al sketch para
-        # indicar mediante los LEDs que la fotografía ha sido aceptada.
-        # Bridge.call("photo_quality", True)
-
         sanitized = sanitize_english_ocr(text)
         translation = braille_translator.translate(sanitized)
         braille_cells = bytes(translation.cells)
@@ -77,10 +68,6 @@ def loop():
         display_braille(braille_cells)
 
 
-# See: https://docs.arduino.cc/software/app-lab/tutorials/getting-started/#app-run
-# App.run(user_loop=loop)
-
-# Provision always before running.
 def take_picture() -> None:
     """Mark one sketch-originated photograph request for the App loop."""
     global picture_requested

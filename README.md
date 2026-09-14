@@ -74,7 +74,7 @@ during development. Other cameras must be configured before the App starts.
 - Arduino App Lab and `arduino-app-cli` on the UNO Q.
 - Docker/container support managed by App Lab.
 - `v4l2-ctl` on the Linux host when identifying camera capture nodes.
-- Python 3 for running the repository's development tests.
+- Python 3.10 or later for running the repository's development tests.
 
 The Brick images install their runtime dependencies themselves. PaddleOCR uses
 Python 3.13, PaddlePaddle 3.2.1 and the PP-OCRv5 mobile detection and
@@ -84,6 +84,7 @@ recognition models.
 
 ```text
 app.yaml                         App Lab application manifest
+requirements-dev.txt             Development-machine test dependencies
 python/main.py                   Linux-side application orchestration
 bricks/v4l2_capture/             Camera client and capture service
 bricks/paddle_ocr/               OCR client and service
@@ -275,9 +276,11 @@ image or a text-region overlay.
 
 ## Tests
 
-Run the current development-machine test suite from the repository root:
+Install the lightweight development-machine test dependencies and run the
+suite from the repository root:
 
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
